@@ -1,0 +1,9 @@
+run_id: E1
+method: tags_tfidf
+description: Last.fm tags, TF-IDF (sparse, cosine)
+params:
+  min_df: 5            # tag must appear on >= 5 songs
+  max_features: 2000
+  use_artist_fallback: true
+standardize: false     # keep TF-IDF geometry; cosine already normalizes
+notes: ""

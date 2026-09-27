@@ -1,0 +1,8 @@
+run_id: E0
+method: random
+description: Random Gaussian baseline (chance-level floor)
+params:
+  dims: 64
+  seed: 0
+standardize: false
+notes: ""

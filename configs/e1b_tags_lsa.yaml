@@ -1,0 +1,10 @@
+run_id: E1b-k100
+method: tags_lsa
+description: Tags + LSA (truncated SVD of song x tag TF-IDF), k = 100
+params:
+  min_df: 5
+  max_features: 2000
+  use_artist_fallback: true
+  k: 100
+standardize: false
+notes: ""
