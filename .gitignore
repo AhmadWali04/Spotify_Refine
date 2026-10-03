@@ -221,3 +221,7 @@ __marimo__/
 data/
 reports/*.png
 .spotify_cache
+# Logs from the synthetic demo library (the real experiments.csv / models.csv are kept)
+experiments_*.csv
+models_*.csv
+reports/decision_*.md

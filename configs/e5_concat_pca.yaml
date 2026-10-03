@@ -1,0 +1,11 @@
+run_id: E5-k50
+method: concat_pca
+description: E4 projected onto its top 50 principal components
+params:
+  k: 50
+  blocks:
+    - {method: tags_lsa, params: {min_df: 5, max_features: 2000, use_artist_fallback: true, k: 100}}
+    - {method: essentia, params: {}}
+    - {method: clap, params: {}}
+standardize: false
+notes: ""

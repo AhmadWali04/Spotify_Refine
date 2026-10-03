@@ -1,0 +1,12 @@
+run_id: E6
+method: interactions
+description: E4 plus mood x top-10-genre outer-product terms (~50 extra dims)
+params:
+  n_moods: 5
+  n_genres: 10
+  blocks:
+    - {method: tags_lsa, params: {min_df: 5, max_features: 2000, use_artist_fallback: true, k: 100}}
+    - {method: essentia, params: {}}
+    - {method: clap, params: {}}
+standardize: false
+notes: ""

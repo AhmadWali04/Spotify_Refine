@@ -1,4 +1,4 @@
-# Core (M1-M3)
+# Core (Phase 1 M1-M3 + Phase 2 sorter)
 spotipy>=2.24
 pylast>=5.3
 python-dotenv>=1.0
@@ -9,8 +9,11 @@ pyarrow>=15
 scikit-learn>=1.4
 matplotlib>=3.8
 pyyaml>=6.0
+requests>=2.31
+flask>=3.0
 pytest>=8.0
 
-# Audio (M4) - install separately once the install test passes
+# Audio (M4) - install separately once `python check_audio_install.py` shows what's missing.
+# Both decode .m4a previews through ffmpeg (brew install ffmpeg).
 # essentia-tensorflow
 # laion-clap

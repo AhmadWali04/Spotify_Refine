@@ -7,6 +7,7 @@ A song in several playlists counts as correct if any of its playlists is predict
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from math import comb
 from pathlib import Path
@@ -44,8 +45,9 @@ def labeled_set(lib: dict, min_size: int = MIN_PLAYLIST_SIZE):
 
 def load_or_make_folds(lib: dict, labels: dict, path: Path) -> dict[str, int]:
     """Fold id per labeled track, fixed once per library pull and reused by every run."""
+    ids_hash = hashlib.sha1(" ".join(sorted(labels)).encode()).hexdigest()[:12]
     key = {"pulled_at": lib.get("pulled_at"), "seed": SEED, "n_folds": N_FOLDS,
-           "min_size": MIN_PLAYLIST_SIZE, "n_labeled": len(labels)}
+           "min_size": MIN_PLAYLIST_SIZE, "n_labeled": len(labels), "ids": ids_hash}
     if path.exists():
         saved = json.loads(path.read_text())
         if saved["key"] == key:

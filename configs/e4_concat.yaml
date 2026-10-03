@@ -1,0 +1,10 @@
+run_id: E4
+method: concat
+description: "[E1b ; E2 ; E3], each block z-scored and scaled by 1/sqrt(block size)"
+params:
+  blocks:
+    - {method: tags_lsa, params: {min_df: 5, max_features: 2000, use_artist_fallback: true, k: 100}}
+    - {method: essentia, params: {}}
+    - {method: clap, params: {}}
+standardize: false     # blocks are already standardized and weighted inside the featurizer
+notes: ""

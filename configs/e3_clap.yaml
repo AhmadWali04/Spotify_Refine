@@ -1,0 +1,6 @@
+run_id: E3
+method: clap
+description: LAION-CLAP audio embedding (512)
+params: {}
+standardize: false     # cosine geometry of the embedding is what CLAP is trained for
+notes: ""

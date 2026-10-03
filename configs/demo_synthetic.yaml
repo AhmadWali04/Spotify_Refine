@@ -1,0 +1,8 @@
+run_id: DEMO
+method: synthetic
+description: Demo vectors for the synthetic library (never use on the real library)
+params:
+  dims: 32
+  separation: 0.7
+standardize: false
+notes: ""

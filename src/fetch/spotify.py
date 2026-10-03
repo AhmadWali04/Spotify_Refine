@@ -26,15 +26,19 @@ from spotipy.oauth2 import SpotifyOAuth
 from src.paths import LIBRARY, ROOT
 
 SCOPES = "user-library-read playlist-read-private playlist-read-collaborative"
+# Phase 2 write-back (src/sorter/apply.py). Spotipy re-prompts for consent if the cached token lacks these.
+WRITE_SCOPES = SCOPES + " playlist-modify-private playlist-modify-public user-library-modify"
 
 
-def client() -> spotipy.Spotify:
+def client(scopes: str = SCOPES) -> spotipy.Spotify:
     load_dotenv(ROOT / ".env")
     redirect = os.environ.get("SPOTIPY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
     if "localhost" in redirect:
         raise ValueError("Spotify requires 127.0.0.1 in the redirect URI, not localhost.")
+    if not os.environ.get("SPOTIPY_CLIENT_ID") or not os.environ.get("SPOTIPY_CLIENT_SECRET"):
+        raise RuntimeError("Set SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET in .env (see README, Setup).")
     auth = SpotifyOAuth(
-        scope=SCOPES,
+        scope=scopes,
         redirect_uri=redirect,
         cache_path=str(ROOT / ".spotify_cache"),
         open_browser=True,
@@ -61,13 +65,13 @@ def _track_record(t: dict) -> dict:
 
 
 def _playlist_items(sp: spotipy.Spotify, playlist_id: str):
-    """Items of one playlist. Falls back to the newer /items path if /tracks is refused."""
+    """Items of one playlist via /items (Feb 2026 rename); falls back to the old /tracks path."""
     try:
-        first = sp.playlist_items(playlist_id, limit=100, additional_types=("track",))
+        first = sp._get(f"playlists/{playlist_id}/items", limit=100, additional_types="track")
     except spotipy.SpotifyException as e:
         if e.http_status not in (403, 404):
             raise
-        first = sp._get(f"playlists/{playlist_id}/items", limit=100)
+        first = sp.playlist_items(playlist_id, limit=100, additional_types=("track",))
     for item in _paged(sp, first):
         # Newer responses nest the object under "item"; older ones under "track".
         yield item.get("track") or item.get("item")
@@ -91,7 +95,8 @@ def pull(include_followed: bool = False) -> dict:
     playlists = []
     for p in _paged(sp, sp.current_user_playlists(limit=50)):
         owner = p["owner"]["id"]
-        if owner != me["id"] and not include_followed:
+        # Since Feb 2026, contents are only returned for playlists you own or collaborate on.
+        if owner != me["id"] and not p.get("collaborative") and not include_followed:
             continue
         ids = []
         try:
@@ -104,6 +109,7 @@ def pull(include_followed: bool = False) -> dict:
             print(f"  ! skipped '{p['name']}': HTTP {e.http_status}")
             continue
         playlists.append({"id": p["id"], "name": p["name"], "owner": owner,
+                          "collaborative": bool(p.get("collaborative")),
                           "track_ids": list(dict.fromkeys(ids))})
 
     return {

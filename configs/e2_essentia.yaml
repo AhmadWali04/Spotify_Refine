@@ -1,0 +1,7 @@
+run_id: E2
+method: essentia
+description: Essentia mood / danceability / valence / arousal + Discogs-400 genre probabilities
+params:
+  blocks: all          # "moods" keeps only the 8 named axes
+standardize: true      # probabilities live on very different scales
+notes: ""

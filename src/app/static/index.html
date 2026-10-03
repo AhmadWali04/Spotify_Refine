@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotify Refine</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%228%22 fill=%22%231a8f4c%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">Spotify Refine</div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="review" class="active">Review <span class="pill" id="n-review"></span></button>
+      <button role="tab" data-tab="clusters">New playlists <span class="pill" id="n-clusters"></span></button>
+      <button role="tab" data-tab="playlists">Your playlists</button>
+      <button role="tab" data-tab="apply">Apply <span class="pill accent" id="n-plan"></span></button>
+    </nav>
+    <div class="progress" title="Reviewed songs"><div id="progress-bar"></div></div>
+  </header>
+
+  <div id="demo-banner" class="banner" hidden>
+    Demo mode: synthetic library, nothing here touches Spotify. Add your keys to <code>.env</code> and pull your library to use it for real.
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <main>
+    <!-- REVIEW -->
+    <section id="tab-review" class="tab active">
+      <aside class="queue">
+        <div class="queue-controls">
+          <input id="search" type="search" placeholder="Search songs or artists">
+          <div class="chips" id="tier-filter">
+            <button data-tier="all" class="chip active">All</button>
+            <button data-tier="confident" class="chip">Confident</button>
+            <button data-tier="suggested" class="chip">Suggested</button>
+            <button data-tier="leftover" class="chip">Leftover</button>
+            <button data-tier="no_data" class="chip">No data</button>
+          </div>
+          <label class="check"><input type="checkbox" id="undecided-only" checked> Undecided only</label>
+          <button id="bulk" class="btn secondary small"></button>
+        </div>
+        <ol id="queue-list" class="queue-list"></ol>
+      </aside>
+
+      <article id="card" class="card"></article>
+    </section>
+
+    <!-- NEW PLAYLISTS -->
+    <section id="tab-clusters" class="tab">
+      <p class="lede">Songs that didn't fit any playlist, grouped by sound. Name the ones you like and switch them on; they become new private playlists when you apply.</p>
+      <div id="cluster-grid" class="grid"></div>
+    </section>
+
+    <!-- PLAYLISTS -->
+    <section id="tab-playlists" class="tab">
+      <p class="lede">What the sorter thinks each playlist sounds like, learned from the songs already in it.</p>
+      <div id="playlist-grid" class="grid"></div>
+    </section>
+
+    <!-- APPLY -->
+    <section id="tab-apply" class="tab">
+      <div class="apply">
+        <h2>Changes waiting to go to Spotify</h2>
+        <p class="lede">Only adds songs and creates new private playlists. Nothing you already have is removed or reordered, and every apply can be undone.</p>
+        <div id="plan"></div>
+        <button id="apply-btn" class="btn primary">Apply to Spotify</button>
+        <h3>Model</h3>
+        <div id="model-info" class="muted"></div>
+        <h3>Previous applies</h3>
+        <ul id="applied" class="applied"></ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="keys">
+    <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> add to suggestion · <kbd>N</kbd> new playlist · <kbd>S</kbd> skip ·
+    <kbd>Z</kbd> undo · <kbd>J</kbd>/<kbd>K</kbd> next / previous · <kbd>P</kbd> play / pause · <kbd>/</kbd> search
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

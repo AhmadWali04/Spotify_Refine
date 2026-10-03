@@ -11,9 +11,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
-import json
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -22,12 +19,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-import yaml  # noqa: E402
 
 from src import paths  # noqa: E402
 from src.evaluate import evaluate  # noqa: E402
-from src.featurize import FEATURIZERS  # noqa: E402
-from src.linalg import block_weight, pca, zscore  # noqa: E402
+from src.linalg import pca  # noqa: E402
+from src.vectors import build_X, cached_featurize, load_config  # noqa: E402
 
 LOG_COLUMNS = [
     "timestamp", "run_id", "method", "dims", "coverage_liked", "coverage_labeled",
@@ -38,41 +34,6 @@ LOG_COLUMNS = [
     "n_playlists", "n_labeled", "n_eval", "featurize_min", "vector_mb",
     "config_hash", "notes",
 ]
-
-
-def cached_featurize(cfg: dict, lib: dict, lib_path: Path, force: bool):
-    """Vectors live in data/vectors/<run_id>.npy + .index.csv; reused while the config and library match."""
-    run_id = cfg["run_id"]
-    key = json.dumps({"method": cfg["method"], "params": cfg.get("params", {}),
-                      "library": str(lib_path.name), "pulled_at": lib.get("pulled_at")},
-                     sort_keys=True)
-    h = hashlib.sha1(key.encode()).hexdigest()[:10]
-    npy = paths.VECTORS / f"{run_id}.npy"
-    idx = paths.VECTORS / f"{run_id}.index.csv"
-    meta = paths.VECTORS / f"{run_id}.meta.json"
-
-    if not force and npy.exists() and meta.exists() and json.loads(meta.read_text())["hash"] == h:
-        m = json.loads(meta.read_text())
-        print(f"Using cached vectors {npy.name}")
-        return pd.read_csv(idx)["track_id"].tolist(), np.load(npy), m["featurize_min"], h
-
-    fn = FEATURIZERS[cfg["method"]]
-    track_ids = list(lib["tracks"])
-    t0 = time.time()
-    ids, X = fn(lib, track_ids, cfg.get("params", {}))
-    minutes = (time.time() - t0) / 60
-    np.save(npy, X)
-    pd.DataFrame({"track_id": ids}).to_csv(idx, index=False)
-    meta.write_text(json.dumps({"hash": h, "featurize_min": minutes, "config": cfg}, indent=1))
-    return ids, X, minutes, h
-
-
-def build_X(X: np.ndarray, cfg: dict) -> np.ndarray:
-    if cfg.get("standardize", False):
-        X = zscore(X)
-        if cfg.get("block_weight", False):
-            X = block_weight(X)
-    return X
 
 
 def pca_plot(X: np.ndarray, res: dict, run_id: str, out: Path, top_n: int = 10) -> None:
@@ -115,11 +76,11 @@ def main() -> None:
     ap.add_argument("--force", action="store_true", help="recompute vectors even if cached")
     args = ap.parse_args()
 
-    cfg = yaml.safe_load(Path(args.config).read_text())
+    cfg = load_config(args.config)
     lib_path = Path(args.library)
     lib = paths.load_library(lib_path)
     # Keep synthetic / alternate libraries out of the real log and fold file.
-    suffix = "" if lib_path.resolve() == paths.LIBRARY.resolve() else f"_{lib_path.stem}"
+    suffix = paths.library_suffix(lib_path)
     log_path = paths.ROOT / f"experiments{suffix}.csv"
     folds_path = paths.DATA / f"folds{suffix}.json"
 
