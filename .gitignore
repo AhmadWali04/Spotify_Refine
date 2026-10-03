@@ -220,6 +220,7 @@ __marimo__/
 # Playlist Sorter: local data, caches and outputs
 data/
 reports/*.png
+reports/plots/
 .spotify_cache
 # Logs from the synthetic demo library (the real experiments.csv / models.csv are kept)
 experiments_*.csv

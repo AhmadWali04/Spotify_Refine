@@ -76,6 +76,19 @@ python -m src.sorter.apply --undo data/applied/<changelog>.json
 After applying, re-pull (`python -m src.fetch.spotify`) and re-run the sorter so it learns from the new memberships.
 To skip Phase 1, pass a featurizer by hand: `python -m src.sorter.run --config configs/e1b_tags_lsa.yaml`.
 
+## Plots of your whole library
+
+```bash
+python -m src.plots                       # PCA + SVD of every song, colored by playlist
+python -m src.plots --color tier          # colored by sorter tier (after src.sorter.run)
+python -m src.plots --color cluster       # leftover songs colored by new-playlist cluster
+python -m src.plots --config configs/e1b_tags_lsa.yaml --liked-only
+```
+
+Writes `reports/plots/<run_id>/`: `pca_scatter.png`, `pca_pairs.png` (PC1-PC4), `pca_variance.png`
+(scree + cumulative, marking 50/80/90%), `svd_scatter.png` and `svd_spectrum.png`. PCA centers the songs
+first; the SVD is uncentered (as LSA uses it), so its first direction mostly tracks the average song.
+
 ## The review app
 
 | Tab | What you do there |
@@ -106,6 +119,7 @@ src/linalg.py        z-score, block weighting, PCA and truncated SVD (hand-writt
 src/evaluate.py      fixed 5 folds, nearest-centroid and kNN-10 cosine scoring, metrics
 src/vectors.py       cached featurization shared by experiments and the sorter
 src/decide.py        PRD1 decision rules over experiments.csv
+src/plots.py         PCA / SVD plots of every song in a space
 src/sorter/          models, calibrate, compare, novelty, cluster, describe, run, review, apply
 src/app/             Flask API + one-page review UI (static/)
 run_experiment.py    experiment loop entry point
