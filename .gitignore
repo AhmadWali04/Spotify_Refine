@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+PRD1.md 
+PRD2.md 
+
+
 # Distribution / packaging
 .Python
 build/
