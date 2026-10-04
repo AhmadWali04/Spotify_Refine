@@ -1,13 +1,12 @@
-// Spotify Refine review page. Vanilla JS; all state comes from /api/state.
+// Spotify Refine shell: session, login/landing, routing, and the Home pipeline view.
+// review.js (sorting views) and gallery.js (taste gallery) hook in through window.App.
 "use strict";
 
-const S = { meta: null, playlists: [], plById: {}, clusters: [], clById: {}, songs: [], decisions: {} };
-const ui = { tab: "review", tier: "all", search: "", undecidedOnly: true, sel: null };
-
 const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pct = (p) => `${Math.round(100 * p)}%`;
-const songs = (n) => `${n} song${n === 1 ? "" : "s"}`;
+const songs = (n) => `${n.toLocaleString()} song${n === 1 ? "" : "s"}`;
 
 async function api(path, body) {
   const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -26,355 +25,190 @@ function toast(msg, error = false) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (t.hidden = true), error ? 6000 : 2500);
 }
-const guard = (fn) => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
+const guard = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { toast(e.message, true); } };
 
-async function load() {
-  const st = await api("/api/state");
-  Object.assign(S, st);
-  S.plById = Object.fromEntries(st.playlists.map((p) => [p.id, p]));
-  S.clById = Object.fromEntries(st.clusters.map((c) => [c.id, c]));
-  $("#demo-banner").hidden = !st.meta.demo;
-  render();
-}
+const VIEWS = ["home", "review", "clusters", "playlists", "apply", "gallery"];
+const App = { session: null, view: "home", ready: false, hooks: { ready: [], view: [] } };
+window.App = App;
 
-// ---------------------------------------------------------------- helpers
+// ---------------------------------------------------------------- session
 
-function vibeText(v) {
-  if (!v) return "";
-  const parts = v.tags.length ? v.tags.slice(0, 3).map((t) => t.tag) : v.axes.map((a) => a.label);
-  if (!parts.length && v.genre) parts.push(v.genre.split("---").pop());
-  if (!parts.length && v.artists.length) parts.push(`like ${v.artists[0]}`);
-  return parts.join(", ");
-}
-
-function vibeChips(v) {
-  if (!v) return "";
-  const chips = [
-    ...v.tags.map((t) => `<span class="tag" title="${pct(t.share)} of songs, ${t.lift}x the library">${esc(t.tag)}</span>`),
-    ...v.axes.map((a) => `<span class="tag axis">${esc(a.label)}</span>`),
-  ];
-  if (v.genre) chips.push(`<span class="tag axis">${esc(v.genre.split("---").pop())}</span>`);
-  if (v.decade) chips.push(`<span class="tag">${esc(v.decade)}</span>`);
-  return `<div class="tags">${chips.join("")}</div>`;
-}
-
-function decisionLabel(d) {
-  if (!d) return "";
-  if (d.action === "add") return "Add to " + d.playlist_ids.map((id) => S.plById[id]?.name || id).join(", ");
-  if (d.action === "new") return "New playlist: " + (S.clById[d.cluster_id]?.name || d.cluster_id);
-  if (d.action === "auto") return "Added to new playlist";
-  return "Skipped";
-}
-
-function filtered() {
-  const q = ui.search.trim().toLowerCase();
-  return S.songs.filter((s) => {
-    if (ui.tier !== "all" && s.tier !== ui.tier) return false;
-    if (ui.undecidedOnly && S.decisions[s.track_id] && s.track_id !== ui.sel) return false;
-    if (q && !(`${s.name} ${s.artists.join(" ")} ${s.album || ""}`.toLowerCase().includes(q))) return false;
-    return true;
-  });
-}
-
-// ---------------------------------------------------------------- render
-
-function render() {
-  const total = S.songs.length;
-  const decided = S.songs.filter((s) => S.decisions[s.track_id]).length;
-  $("#progress-bar").style.width = total ? `${(100 * decided) / total}%` : "0";
-  $(".progress").title = `${decided} of ${total} songs reviewed`;
-  $("#n-review").textContent = total - decided || "";
-  $("#n-clusters").textContent = S.clusters.length || "";
-  renderQueue();
-  renderCard();
-  if (ui.tab === "clusters") renderClusters();
-  if (ui.tab === "playlists") renderPlaylists();
-  if (ui.tab === "apply") renderApply();
-  refreshPlanCount();
-}
-
-function renderQueue() {
-  const list = filtered();
-  if (!ui.sel || !list.some((s) => s.track_id === ui.sel)) ui.sel = list[0]?.track_id ?? null;
-  const ol = $("#queue-list");
-  if (!list.length) {
-    ol.innerHTML = `<li class="queue-empty">${S.songs.length ? "Nothing left in this view. Nice." : "No unsorted liked songs."}</li>`;
-  } else {
-    // Render a window around the selection to keep long libraries snappy.
-    const i = Math.max(0, list.findIndex((s) => s.track_id === ui.sel));
-    const start = Math.max(0, i - 100), slice = list.slice(start, start + 300);
-    ol.innerHTML = slice.map((s) => {
-      const d = S.decisions[s.track_id];
-      const badge = d ? `<span class="badge ${d.action === "skip" ? "skip" : "done"}">${d.action === "skip" ? "skip" : "done"}</span>`
-                      : `<span class="badge ${s.tier}">${s.tier === "no_data" ? "no data" : s.tier}</span>`;
-      return `<li data-id="${esc(s.track_id)}" class="${s.track_id === ui.sel ? "sel" : ""}">
-        <span class="t">${esc(s.name)}</span><span class="s">${badge}</span>
-        <span class="a">${esc(s.artists.join(", "))}</span></li>`;
-    }).join("");
-    $("li.sel", ol)?.scrollIntoView({ block: "nearest" });
+async function refreshSession() {
+  const s = await api("/api/session");
+  const wasReady = App.ready;
+  App.session = s;
+  App.ready = s.ready;
+  const showLanding = s.mode === "spotify" && !s.user;
+  $("#landing").hidden = !showLanding;
+  $("#shell").hidden = showLanding;
+  if (showLanding) renderLanding();
+  else {
+    renderChrome();
+    renderHome();
+    if (App.ready && (!wasReady || App.needsReload)) {
+      App.needsReload = false;
+      for (const fn of App.hooks.ready) await fn();
+    }
   }
-  const nConf = S.songs.filter((s) => s.tier === "confident" && s.suggestions.length && !S.decisions[s.track_id]).length;
-  const bulk = $("#bulk");
-  bulk.textContent = nConf ? `Accept all ${nConf} confident suggestions` : "No confident suggestions left";
-  bulk.disabled = !nConf;
+  schedulePoll();
+  return s;
 }
 
-function renderCard() {
-  const card = $("#card");
-  const s = S.songs.find((x) => x.track_id === ui.sel);
-  if (!s) {
-    card.innerHTML = `<p class="muted">Pick a song on the left.</p>`;
-    return;
-  }
-  const d = S.decisions[s.track_id];
-  const chosen = new Set(d?.action === "add" ? d.playlist_ids : []);
-  const player = s.preview_url
-    ? `<audio controls preload="none" src="${esc(s.preview_url)}"></audio>`
-    : S.meta.demo ? `<p class="muted">No audio in demo mode.</p>`
-    : `<iframe loading="lazy" allow="encrypted-media" title="Spotify player" src="https://open.spotify.com/embed/track/${encodeURIComponent(s.track_id)}"></iframe>`;
+let pollTimer;
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  if (App.session?.jobs.running) pollTimer = setTimeout(guard(pollJobs), 1000);
+}
+async function pollJobs() {
+  await refreshSession();
+  if (App.session.jobs.running) return;
+  // The run just ended: reload the review data from disk and say how it went.
+  const steps = Object.values(App.session.jobs.steps);
+  App.needsReload = true;
+  await refreshSession();
+  if (steps.some((j) => j.status === "failed")) toast("A step failed. Its log is on the Home page.", true);
+  else if (App.session.jobs.steps.sort.status === "done") toast("Sorted. Your suggestions are ready.");
+  else toast("Done.");
+}
 
-  const tierHelp = {
-    confident: "Held-out accuracy at this confidence was at or above the target.",
-    suggested: "A reasonable guess; check it.",
-    leftover: s.novel ? "Sounds unlike your playlists; probably a new playlist." : "Low confidence for every playlist.",
-    no_data: "No tags or audio for this song, so no suggestion. Pick by hand.",
-  }[s.tier];
+// ---------------------------------------------------------------- landing
 
-  const sugg = s.suggestions.map((g, i) => {
-    const p = S.plById[g.playlist_id];
-    return `<button data-pl="${esc(g.playlist_id)}" class="${chosen.has(g.playlist_id) ? "chosen" : ""}">
-      <kbd>${i + 1}</kbd><span class="name">${esc(p?.name || g.playlist_id)}</span>
-      <span class="vibe">${esc(vibeText(p?.vibe))}</span>
-      <span class="bar">${pct(g.p)}<span class="meter"><div style="width:${pct(g.p)}"></div></span></span></button>`;
+function renderLanding() {
+  const s = App.session;
+  const err = new URLSearchParams(location.search).get("error");
+  $("#landing-error").hidden = !err;
+  $("#landing-error").textContent = err || "";
+  $("#setup-help").hidden = s.configured;
+  $("#redirect-uri").textContent = s.redirect_uri;
+  const login = $("#login-btn");
+  login.classList.toggle("disabled", !s.configured);
+  login.setAttribute("aria-disabled", String(!s.configured));
+}
+
+// ---------------------------------------------------------------- chrome (sidebar, user)
+
+function renderChrome() {
+  const s = App.session;
+  $$(".nav a.needs-ready").forEach((a) => a.classList.toggle("disabled", !App.ready));
+  const u = s.user;
+  $("#user").innerHTML = u
+    ? `<span class="user-pill"><span class="avatar">${u.image ? `<img src="${esc(u.image)}" alt="">` : esc(u.name[0])}</span>${esc(u.name)}</span>
+       <button class="btn small outline" id="logout">Log out</button>`
+    : s.mode === "demo" ? `<a class="btn small primary" href="/login">Log in with Spotify</a>` : "";
+  $("#mode-card").innerHTML = s.mode === "demo"
+    ? `<strong>Demo library</strong>3,000 synthetic songs in 25 playlists. Nothing here touches Spotify.
+       <button class="btn small primary" id="use-spotify">Use my Spotify</button>`
+    : `<strong>Your Spotify library</strong>${s.done.pull ? "Pulled and on this machine." : "Not pulled yet."}
+       <br><button class="btn small outline" id="use-demo">Try the demo library</button>`;
+}
+
+// ---------------------------------------------------------------- home
+
+const STEP_INFO = {
+  pull: { title: "Pull your library", spotify: "Liked Songs and the playlists you own. Read-only.", demo: "Generate a 3,000-song synthetic library with hidden genres." },
+  tags: { title: "Fetch Last.fm tags", spotify: "Crowd tags for every song: the sorter's main signal. Resumable; roughly 10–30 min for 3,000 songs.", demo: "Included with the demo library." },
+  sort: { title: "Sort", spotify: "Pick a model, score every unsorted liked song, and find new playlists.", demo: "Pick a model, score every unsorted liked song, and find new playlists." },
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+
+function stepState(name) {
+  const s = App.session, j = s.jobs.steps[name];
+  if (["running", "queued", "failed"].includes(j.status)) return j.status;
+  if (j.status === "skipped" || s.done[name]) return "done";
+  return "idle";
+}
+
+function renderHome() {
+  const s = App.session;
+  const who = s.mode === "demo" ? "" : `, ${esc(s.user?.name?.split(" ")[0] || "")}`;
+  $("#home-hero").innerHTML = `<div class="eyebrow">${s.mode === "demo" ? "Demo library" : "Your Spotify"}</div>
+    <h1>${greeting()}${who}</h1>
+    <p class="lede">${App.ready
+      ? "Your suggestions are ready. Sort the songs, name the new playlists, then see what your taste looks like."
+      : "Three steps and your Liked Songs are ready to sort. Run them all, or one at a time."}</p>`;
+
+  $("#steps").innerHTML = ["pull", "tags", "sort"].map((name, i) => {
+    const st = stepState(name), j = s.jobs.steps[name], info = STEP_INFO[name];
+    const label = { done: "Done", running: j.progress != null ? `Running · ${pct(j.progress)}` : "Running", queued: "Queued", failed: "Failed", idle: "Not run" }[st];
+    let note = info[s.mode];
+    if (name === "sort" && s.mode === "spotify" && !s.has_decision) note += " Uses tags + LSA until the Phase 1 experiments pick a featurizer.";
+    const busy = st === "running" || st === "queued";
+    const demoTags = s.mode === "demo" && name === "tags";
+    return `<div class="step ${st}">
+      <div class="step-top"><span class="step-num">${st === "done" ? "✓" : st === "failed" ? "!" : i + 1}</span>
+        <div><h3>${info.title}</h3></div></div>
+      <p>${esc(note)}</p>
+      ${busy ? `<div class="bar ${j.progress == null ? "indeterminate" : ""}"><div style="width:${pct(j.progress || 0)}"></div></div>` : ""}
+      ${j.lines.length && st !== "done" ? `<pre class="log">${esc(j.lines.slice(st === "failed" ? -8 : -3).join("\n"))}</pre>` : ""}
+      <div class="row"><span class="status-pill ${st}">${label}</span>
+        ${demoTags ? "" : busy ? (st === "running" ? `<button class="btn small outline" data-stop>Stop</button>` : "")
+          : `<button class="btn small ${st === "done" ? "outline" : "primary"}" data-run="${name}">${st === "done" ? "Run again" : st === "failed" ? "Retry" : "Run"}</button>`}
+      </div></div>`;
   }).join("");
 
-  const writable = S.playlists.filter((p) => p.writable);
-  const clusterOpts = S.clusters.map((c) =>
-    `<option value="${esc(c.id)}" ${c.id === (d?.cluster_id || s.cluster) ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+  const allDone = ["pull", "tags", "sort"].every((n) => stepState(n) === "done");
+  const run = $("#run-all");
+  run.disabled = s.jobs.running;
+  run.textContent = s.jobs.running ? "Running…" : allDone ? "Refresh everything" : "Run all steps";
 
-  card.innerHTML = `
-    <span class="badge ${s.tier}" title="${esc(tierHelp)}">${s.tier === "no_data" ? "no data" : s.tier}</span>
-    ${s.confidence != null ? `<span class="muted"> &nbsp;${pct(s.confidence)} sure</span>` : ""}
-    <h1>${esc(s.name)}</h1>
-    <p class="by">${esc(s.artists.join(", "))}${s.album ? ` · ${esc(s.album)}` : ""}${s.release_date ? ` · ${esc(String(s.release_date).slice(0, 4))}` : ""}</p>
-    <div class="player">${player}</div>
-    ${s.suggestions.length ? `<h3>Best fits</h3><div class="sugg">${sugg}</div>` : ""}
-    <div class="actions">
-      <div class="other">
-        <input type="text" id="other-pl" list="pl-list" placeholder="Other playlist…" aria-label="Other playlist">
-        <datalist id="pl-list">${writable.map((p) => `<option value="${esc(p.name)}">`).join("")}</datalist>
-        <button class="btn" id="other-add">Add</button>
-      </div>
-    </div>
-    <div class="actions">
-      ${S.clusters.length ? `<select id="cluster-pick" class="btn" aria-label="New playlist">${clusterOpts}</select>
-        <button class="btn" id="to-new"><kbd>N</kbd> Send to new playlist</button>` : ""}
-      <button class="btn" id="skip"><kbd>S</kbd> Skip</button>
-    </div>
-    ${d ? `<div class="status"><span class="badge done">decided</span> ${esc(decisionLabel(d))}
-      ${d.applied_at ? `<span class="muted">· applied ${esc(d.applied_at)}</span>` : `<button class="btn small" id="undo"><kbd>Z</kbd> Undo</button>`}</div>` : ""}
-    <p class="muted" style="margin-top:16px;font-size:13px">${esc(tierHelp)}</p>`;
+  $("#shortcuts").innerHTML = App.ready && App.shortcuts ? `<div class="section-head"><h2>Jump back in</h2></div><div class="shelf">${App.shortcuts()}</div>` : "";
 }
 
-function renderClusters() {
-  const grid = $("#cluster-grid");
-  if (!S.clusters.length) {
-    grid.innerHTML = `<p class="muted">No clusters: every unsorted song fit an existing playlist well enough, or there were too few leftovers.</p>`;
-    return;
-  }
-  grid.innerHTML = S.clusters.map((c) => {
-    const members = c.members.map((t) => S.songs.find((s) => s.track_id === t)).filter(Boolean);
-    return `<div class="tile ${c.approved ? "on" : ""}" data-cid="${esc(c.id)}">
-      <label class="toggle"><input type="checkbox" class="approve" ${c.approved ? "checked" : ""}>
-        ${c.playlist_id ? "Created on Spotify" : "Create this playlist"}</label>
-      <input type="text" class="cname" value="${esc(c.name)}" aria-label="Playlist name" ${c.playlist_id ? "disabled" : ""}>
-      <div class="meta">${songs(members.length)}${c.vibe.artists.length ? ` · ${esc(c.vibe.artists.join(", "))}` : ""}</div>
-      ${vibeChips(c.vibe)}
-      <ul class="songs">${members.map((s) => `<li><span>${esc(s.name)} · <span class="muted">${esc(s.artists.join(", "))}</span></span>
-        <button class="btn link small drop" data-id="${esc(s.track_id)}" title="Leave this song out">remove</button></li>`).join("")}</ul>
-    </div>`;
-  }).join("");
+function stepsToRun() {
+  const order = ["pull", "tags", "sort"];
+  const first = order.findIndex((n) => stepState(n) !== "done");
+  return first === -1 ? order : order.slice(first);
 }
 
-function renderPlaylists() {
-  const pending = {};
-  for (const d of Object.values(S.decisions)) {
-    if (d.action === "add" && !d.applied_at) for (const id of d.playlist_ids) pending[id] = (pending[id] || 0) + 1;
-  }
-  $("#playlist-grid").innerHTML = [...S.playlists].sort((a, b) => b.size - a.size).map((p) => `
-    <div class="tile">
-      <h4>${esc(p.name)}</h4>
-      <div class="meta">${songs(p.size)}${pending[p.id] ? ` · <strong>+${pending[p.id]} pending</strong>` : ""}
-        ${!p.scored ? " · too small to learn from (under 10 songs)" : ""}${!p.writable ? " · read-only (not yours)" : ""}</div>
-      ${vibeChips(p.vibe)}
-      ${p.vibe.artists.length ? `<div class="meta">Top artists: ${esc(p.vibe.artists.join(", "))}</div>` : ""}
-    </div>`).join("");
+// ---------------------------------------------------------------- routing
+
+function showView() {
+  let name = location.hash.slice(1);
+  if (!VIEWS.includes(name)) name = "home";
+  if (!App.ready && name !== "home") name = "home";
+  App.view = name;
+  $$(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === name));
+  $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
+  $("#scroll").scrollTop = 0;
+  for (const fn of App.hooks.view) fn(name);
 }
-
-async function refreshPlanCount() {
-  try {
-    const { plan } = await api("/api/plan");
-    $("#n-plan").textContent = plan.n_songs || "";
-  } catch { /* shown on the apply tab */ }
-}
-
-async function renderApply() {
-  const { plan, demo, applied } = await api("/api/plan");
-  const rows = [
-    ...plan.create.map((c) => `<li><span>${c.playlist_id ? "Add to new playlist" : "Create playlist"} <strong>${esc(c.name)}</strong></span><span>${songs(c.track_ids.length)}</span></li>`),
-    ...plan.add.map((a) => `<li><span>Add to <strong>${esc(a.name)}</strong></span><span>${songs(a.track_ids.length)}</span></li>`),
-  ];
-  $("#plan").innerHTML = rows.length ? `<ul class="plan-list">${rows.join("")}</ul>`
-    : `<p class="muted">Nothing yet. Review some songs or switch on a new playlist.</p>`;
-  const btn = $("#apply-btn");
-  btn.disabled = demo || !plan.n_songs;
-  btn.textContent = demo ? "Apply to Spotify (off in demo mode)" : `Apply ${plan.n_songs} changes to Spotify`;
-  $("#model-info").innerHTML = S.meta.spaces.map((sp) =>
-    `<p>Space <code>${esc(sp.run_id)}</code> · model <code>${esc(sp.model)}</code> · held-out top-1 ${sp.top1.toFixed(1)}%, top-3 ${sp.top3.toFixed(1)}%
-     · confident tier from ${sp.calibration.confident_threshold == null ? "n/a" : pct(sp.calibration.confident_threshold)}
-     at ${pct(sp.calibration.target_precision)} precision</p>`).join("") +
-    `<p>Suggestions generated ${esc(S.meta.generated_at)} from library pulled ${esc(S.meta.pulled_at)}.</p>`;
-  $("#applied").innerHTML = applied.length ? applied.map((n) =>
-    `<li><code>${esc(n)}</code> <button class="btn small undo-apply" data-name="${esc(n)}">Undo</button></li>`).join("")
-    : `<li class="muted">None yet.</li>`;
-}
-
-// ---------------------------------------------------------------- actions
-
-function advance() {
-  const list = filtered();
-  const i = list.findIndex((s) => s.track_id === ui.sel);
-  const next = list.slice(i + 1).find((s) => !S.decisions[s.track_id]) || list.find((s) => !S.decisions[s.track_id] && s.track_id !== ui.sel);
-  if (next) ui.sel = next.track_id;
-}
-
-async function decide(body) {
-  const { decision } = await api("/api/decide", body);
-  S.decisions[body.track_id] = decision;
-  advance();
-  render();
-}
-
-const addTo = guard((pid) => decide({ track_id: ui.sel, action: "add", playlist_ids: [pid] }));
-const skip = guard(() => decide({ track_id: ui.sel, action: "skip" }));
-const toNew = guard(() => {
-  const cid = $("#cluster-pick")?.value;
-  if (!cid) throw new Error("No new-playlist clusters to send it to.");
-  return decide({ track_id: ui.sel, action: "new", cluster_id: cid });
-});
-const undo = guard(async () => {
-  if (!S.decisions[ui.sel] || S.decisions[ui.sel].applied_at) return;
-  await api("/api/undo", { track_id: ui.sel });
-  delete S.decisions[ui.sel];
-  render();
-});
-
-function move(delta) {
-  const list = filtered();
-  const i = list.findIndex((s) => s.track_id === ui.sel);
-  const j = Math.min(list.length - 1, Math.max(0, i + delta));
-  if (list[j]) { ui.sel = list[j].track_id; renderQueue(); renderCard(); }
-}
+window.addEventListener("hashchange", showView);
 
 // ---------------------------------------------------------------- events
 
 document.addEventListener("click", guard(async (e) => {
-  const tab = e.target.closest("[data-tab]");
-  if (tab) { location.hash = tab.dataset.tab; return; }
-  const li = e.target.closest("#queue-list li[data-id]");
-  if (li) { ui.sel = li.dataset.id; renderQueue(); renderCard(); return; }
-  const chip = e.target.closest("#tier-filter .chip");
-  if (chip) {
-    ui.tier = chip.dataset.tier;
-    document.querySelectorAll("#tier-filter .chip").forEach((c) => c.classList.toggle("active", c === chip));
-    renderQueue(); renderCard();
-    return;
+  if (e.target.closest("#login-btn.disabled")) { e.preventDefault(); return; }
+  if (e.target.closest("#demo-btn, #use-demo")) {
+    await api("/api/mode", { mode: "demo" });
+    history.replaceState(null, "", "/#home");
+    App.ready = false;
+    await refreshSession();
+    return showView();
   }
-  const sug = e.target.closest(".sugg button");
-  if (sug) return addTo(sug.dataset.pl);
-  if (e.target.closest("#skip")) return skip();
-  if (e.target.closest("#to-new")) return toNew();
-  if (e.target.closest("#undo")) return undo();
-  if (e.target.closest("#other-add")) return addOther();
-  if (e.target.closest("#bulk")) {
-    const { accepted } = await api("/api/bulk_accept", { tier: "confident" });
-    toast(`Accepted ${accepted} confident suggestions`);
-    return load();
+  if (e.target.closest("#use-spotify")) {
+    if (!App.session.configured) { await api("/api/mode", { mode: "spotify" }); App.ready = false; return refreshSession(); }
+    await api("/api/mode", { mode: "spotify" });
+    App.ready = false;
+    const s = await refreshSession();
+    if (!s.user) location.href = "/login";
+    return showView();
   }
-  const drop = e.target.closest(".drop");
-  if (drop) {
-    await api("/api/decide", { track_id: drop.dataset.id, action: "skip" });
-    return load();
+  if (e.target.closest("#logout")) {
+    await api("/api/logout", {});
+    App.ready = false;
+    return refreshSession();
   }
-  if (e.target.closest("#apply-btn")) {
-    const { plan } = await api("/api/plan");
-    if (!confirm(`Apply ${plan.n_songs} changes to your Spotify library?\n\nThis adds songs and creates private playlists. You can undo it afterwards.`)) return;
-    e.target.disabled = true;
-    e.target.textContent = "Applying… (a Spotify login window may open)";
-    const r = await api("/api/apply", {});
-    toast(r.log.errors.length ? `Applied with ${r.log.errors.length} errors: ${r.log.errors[0].error}` : "Applied to Spotify", r.log.errors.length > 0);
-    return load();
-  }
-  const ua = e.target.closest(".undo-apply");
-  if (ua) {
-    if (!confirm(`Undo ${ua.dataset.name}? This removes the songs it added and unfollows the playlists it created.`)) return;
-    const { result } = await api("/api/undo_apply", { changelog: ua.dataset.name });
-    toast(`Removed ${result.removed} songs, unfollowed ${result.unfollowed} playlists` + (result.errors.length ? ` (${result.errors.length} errors)` : ""), result.errors.length > 0);
-    return load();
-  }
+  const runBtn = e.target.closest("[data-run]");
+  if (runBtn) { await api("/api/run", { steps: [runBtn.dataset.run] }); return refreshSession(); }
+  if (e.target.closest("[data-stop]")) { await api("/api/stop", {}); return refreshSession(); }
+  if (e.target.closest("#run-all")) { await api("/api/run", { steps: stepsToRun() }); return refreshSession(); }
 }));
 
-document.addEventListener("change", guard(async (e) => {
-  const tile = e.target.closest(".tile[data-cid]");
-  if (tile && e.target.matches(".approve")) {
-    await api("/api/cluster", { cluster_id: tile.dataset.cid, approved: e.target.checked });
-    return load();
-  }
-  if (tile && e.target.matches(".cname")) {
-    await api("/api/cluster", { cluster_id: tile.dataset.cid, name: e.target.value });
-    toast("Renamed");
-    return load();
-  }
-  if (e.target.id === "undecided-only") { ui.undecidedOnly = e.target.checked; renderQueue(); renderCard(); }
-}));
-
-$("#search").addEventListener("input", (e) => { ui.search = e.target.value; renderQueue(); renderCard(); });
-
-const addOther = guard(() => {
-  const name = $("#other-pl").value.trim().toLowerCase();
-  const p = S.playlists.find((x) => x.writable && x.name.toLowerCase() === name);
-  if (!p) throw new Error("Pick one of your playlists from the list.");
-  return addTo(p.id);
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.target.matches("input, select, textarea")) {
-    if (e.key === "Enter" && e.target.id === "other-pl") addOther();
-    if (e.key === "Escape") e.target.blur();
-    return;
-  }
-  if (ui.tab !== "review" || e.metaKey || e.ctrlKey || e.altKey) return;
-  const s = S.songs.find((x) => x.track_id === ui.sel);
-  const k = e.key.toLowerCase();
-  if (["1", "2", "3"].includes(k) && s?.suggestions[+k - 1]) addTo(s.suggestions[+k - 1].playlist_id);
-  else if (k === "s" && s) skip();
-  else if (k === "n" && s) toNew();
-  else if (k === "z") undo();
-  else if (k === "j" || e.key === "ArrowDown") move(1);
-  else if (k === "k" || e.key === "ArrowUp") move(-1);
-  else if (k === "p") { const a = $("#card audio"); if (a) a.paused ? a.play() : a.pause(); }
-  else if (k === "/") $("#search").focus();
-  else return;
-  e.preventDefault();
-});
-
-function showTab() {
-  const name = location.hash.slice(1);
-  ui.tab = ["review", "clusters", "playlists", "apply"].includes(name) ? name : "review";
-  document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
-  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === `tab-${ui.tab}`));
-  if (S.meta) render();
-}
-window.addEventListener("hashchange", showTab);
-showTab();
-guard(load)();
+guard(async () => {
+  await refreshSession();
+  showView();
+})();

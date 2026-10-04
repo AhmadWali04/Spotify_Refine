@@ -4,80 +4,165 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Spotify Refine</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Ccircle cx=%228%22 cy=%228%22 r=%228%22 fill=%22%231a8f4c%22/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2216%22 fill=%22%231ed760%22/%3E%3Cpath d=%22M9 11h14M9 16h10M9 21h6%22 stroke=%22%23000%22 stroke-width=%223%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand">Spotify Refine</div>
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="review" class="active">Review <span class="pill" id="n-review"></span></button>
-      <button role="tab" data-tab="clusters">New playlists <span class="pill" id="n-clusters"></span></button>
-      <button role="tab" data-tab="playlists">Your playlists</button>
-      <button role="tab" data-tab="apply">Apply <span class="pill accent" id="n-plan"></span></button>
-    </nav>
-    <div class="progress" title="Reviewed songs"><div id="progress-bar"></div></div>
-  </header>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="logo" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="currentColor"/><path d="M9 11h14M9 16h10M9 21h6" stroke="#000" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M12.5 3.25a1 1 0 0 0-1 0L3 8.2V21h6.5v-6h5v6H21V8.2l-8.5-4.95Z" fill="currentColor"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M18 14v6m0 0-2.5-2.5M18 20l2.5-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
+    <symbol id="i-new" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-lib" viewBox="0 0 24 24"><path d="M4 3v18M9 3v18M14.5 3.5l6 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12h12m0 0-5-5m5 5-5 5M20 5v14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-gallery" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor"/><rect x="13" y="3" width="8" height="5" rx="2" fill="currentColor"/><rect x="13" y="10" width="8" height="11" rx="2" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
+  </svg>
 
-  <div id="demo-banner" class="banner" hidden>
-    Demo mode: synthetic library, nothing here touches Spotify. Add your keys to <code>.env</code> and pull your library to use it for real.
-  </div>
-  <div id="toast" class="toast" role="status" hidden></div>
-
-  <main>
-    <!-- REVIEW -->
-    <section id="tab-review" class="tab active">
-      <aside class="queue">
-        <div class="queue-controls">
-          <input id="search" type="search" placeholder="Search songs or artists">
-          <div class="chips" id="tier-filter">
-            <button data-tier="all" class="chip active">All</button>
-            <button data-tier="confident" class="chip">Confident</button>
-            <button data-tier="suggested" class="chip">Suggested</button>
-            <button data-tier="leftover" class="chip">Leftover</button>
-            <button data-tier="no_data" class="chip">No data</button>
-          </div>
-          <label class="check"><input type="checkbox" id="undecided-only" checked> Undecided only</label>
-          <button id="bulk" class="btn secondary small"></button>
-        </div>
-        <ol id="queue-list" class="queue-list"></ol>
-      </aside>
-
-      <article id="card" class="card"></article>
-    </section>
-
-    <!-- NEW PLAYLISTS -->
-    <section id="tab-clusters" class="tab">
-      <p class="lede">Songs that didn't fit any playlist, grouped by sound. Name the ones you like and switch them on; they become new private playlists when you apply.</p>
-      <div id="cluster-grid" class="grid"></div>
-    </section>
-
-    <!-- PLAYLISTS -->
-    <section id="tab-playlists" class="tab">
-      <p class="lede">What the sorter thinks each playlist sounds like, learned from the songs already in it.</p>
-      <div id="playlist-grid" class="grid"></div>
-    </section>
-
-    <!-- APPLY -->
-    <section id="tab-apply" class="tab">
-      <div class="apply">
-        <h2>Changes waiting to go to Spotify</h2>
-        <p class="lede">Only adds songs and creates new private playlists. Nothing you already have is removed or reordered, and every apply can be undone.</p>
-        <div id="plan"></div>
-        <button id="apply-btn" class="btn primary">Apply to Spotify</button>
-        <h3>Model</h3>
-        <div id="model-info" class="muted"></div>
-        <h3>Previous applies</h3>
-        <ul id="applied" class="applied"></ul>
+  <!-- LANDING ---------------------------------------------------------------->
+  <div id="landing" class="landing" hidden>
+    <div class="landing-inner">
+      <div class="wordmark"><svg><use href="#logo"/></svg><span>Spotify Refine</span></div>
+      <h1>Your Liked Songs,<br>finally sorted.</h1>
+      <p class="lede">Refine learns what each of your playlists sounds like, files every stray liked song where it belongs,
+        groups the rest into new playlists, then shows you your taste in ways Wrapped never does.</p>
+      <div id="landing-error" class="alert" hidden></div>
+      <div class="cta">
+        <a id="login-btn" class="btn primary large" href="/login">Log in with Spotify</a>
+        <button id="demo-btn" class="btn outline large">Explore the demo</button>
       </div>
-    </section>
-  </main>
+      <div id="setup-help" class="setup-help" hidden>
+        <h3>One-time setup before you can log in</h3>
+        <ol>
+          <li>Create an app at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>.</li>
+          <li>Add the redirect URI <code id="redirect-uri">http://127.0.0.1:8888/callback</code> to it.</li>
+          <li>Copy <code>.env.example</code> to <code>.env</code>, paste the Client ID and secret, and restart <code>python -m src.app</code>.</li>
+        </ol>
+        <p class="muted">Development-mode Spotify apps work for up to 5 accounts you add on the dashboard. Nothing leaves your machine except calls to Spotify and Last.fm.</p>
+      </div>
+      <ul class="landing-points">
+        <li><strong>Sort</strong> every unsorted liked song into the playlist it fits, with a confidence for each.</li>
+        <li><strong>Discover</strong> new playlists hiding in the songs that fit nowhere.</li>
+        <li><strong>See</strong> your taste: a galaxy of your library, your listening clock, your eras.</li>
+      </ul>
+    </div>
+  </div>
 
-  <footer class="keys">
-    <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> add to suggestion · <kbd>N</kbd> new playlist · <kbd>S</kbd> skip ·
-    <kbd>Z</kbd> undo · <kbd>J</kbd>/<kbd>K</kbd> next / previous · <kbd>P</kbd> play / pause · <kbd>/</kbd> search
-  </footer>
+  <!-- APP SHELL -------------------------------------------------------------->
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar">
+      <a class="wordmark small" href="#home"><svg><use href="#logo"/></svg><span>Refine</span></a>
+      <nav class="nav">
+        <a data-view="home" href="#home"><svg><use href="#i-home"/></svg><span>Home</span></a>
+        <a data-view="review" href="#review" class="needs-ready"><svg><use href="#i-sort"/></svg><span>Sort songs</span><span class="count" id="n-review"></span></a>
+        <a data-view="clusters" href="#clusters" class="needs-ready"><svg><use href="#i-new"/></svg><span>New playlists</span><span class="count" id="n-clusters"></span></a>
+        <a data-view="playlists" href="#playlists" class="needs-ready"><svg><use href="#i-lib"/></svg><span>Your playlists</span></a>
+        <a data-view="apply" href="#apply" class="needs-ready"><svg><use href="#i-send"/></svg><span>Apply</span><span class="count accent" id="n-plan"></span></a>
+        <a data-view="gallery" href="#gallery" class="needs-ready"><svg><use href="#i-gallery"/></svg><span>Taste gallery</span></a>
+      </nav>
+      <div class="side-card" id="mode-card"></div>
+    </aside>
 
+    <div class="main">
+      <header class="topbar">
+        <div class="progress-wrap" title="Reviewed songs"><div class="progress"><div id="progress-bar"></div></div><span id="progress-text"></span></div>
+        <div class="user" id="user"></div>
+      </header>
+      <div id="toast" class="toast" role="status" hidden></div>
+
+      <div class="scroll" id="scroll">
+        <!-- HOME -->
+        <section id="view-home" class="view">
+          <div class="hero" id="home-hero"></div>
+          <div class="pad">
+            <div class="section-head">
+              <h2>Get your library ready</h2>
+              <button id="run-all" class="btn primary">Run all steps</button>
+            </div>
+            <div class="steps" id="steps"></div>
+            <div id="shortcuts"></div>
+          </div>
+        </section>
+
+        <!-- REVIEW -->
+        <section id="view-review" class="view">
+          <div class="review">
+            <aside class="queue">
+              <div class="queue-controls">
+                <input id="search" type="search" placeholder="Search songs or artists" aria-label="Search">
+                <div class="chips" id="tier-filter">
+                  <button data-tier="all" class="chip active">All</button>
+                  <button data-tier="confident" class="chip">Confident</button>
+                  <button data-tier="suggested" class="chip">Suggested</button>
+                  <button data-tier="leftover" class="chip">Leftover</button>
+                  <button data-tier="no_data" class="chip">No data</button>
+                </div>
+                <label class="check"><input type="checkbox" id="undecided-only" checked> Undecided only</label>
+                <button id="bulk" class="btn outline small"></button>
+              </div>
+              <ol id="queue-list" class="queue-list"></ol>
+            </aside>
+            <article id="card" class="card"></article>
+          </div>
+          <footer class="keys">
+            <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> add to suggestion · <kbd>N</kbd> new playlist · <kbd>S</kbd> skip ·
+            <kbd>Z</kbd> undo · <kbd>J</kbd>/<kbd>K</kbd> next / previous · <kbd>P</kbd> play / pause · <kbd>/</kbd> search
+          </footer>
+        </section>
+
+        <!-- NEW PLAYLISTS -->
+        <section id="view-clusters" class="view">
+          <div class="hero slim violet"><div class="eyebrow">Discovered</div><h1>New playlists</h1>
+            <p class="lede">Songs that didn't fit any playlist, grouped by sound. Name the ones you like and switch them on; they become new private playlists when you apply.</p></div>
+          <div class="pad"><div id="cluster-grid" class="grid"></div></div>
+        </section>
+
+        <!-- PLAYLISTS -->
+        <section id="view-playlists" class="view">
+          <div class="hero slim blue"><div class="eyebrow">Library</div><h1>Your playlists</h1>
+            <p class="lede">What the sorter thinks each playlist sounds like, learned from the songs already in it.</p></div>
+          <div class="pad"><div id="playlist-grid" class="grid"></div></div>
+        </section>
+
+        <!-- APPLY -->
+        <section id="view-apply" class="view">
+          <div class="hero slim"><div class="eyebrow">Write-back</div><h1>Apply to Spotify</h1>
+            <p class="lede">Only adds songs and creates new private playlists. Nothing you already have is removed or reordered, and every apply can be undone.</p></div>
+          <div class="pad apply">
+            <div id="plan"></div>
+            <button id="apply-btn" class="btn primary large">Apply to Spotify</button>
+            <h3>Model</h3>
+            <div id="model-info" class="muted"></div>
+            <h3>Previous applies</h3>
+            <ul id="applied" class="applied"></ul>
+          </div>
+        </section>
+
+        <!-- GALLERY -->
+        <section id="view-gallery" class="view">
+          <div class="hero gallery-hero"><div class="eyebrow">Taste gallery</div><h1 id="gallery-title">Your music, mapped</h1>
+            <div class="stats" id="stats"></div></div>
+          <div class="pad"><div class="gallery" id="gallery"></div></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <div id="modal" class="modal" hidden>
+    <div class="modal-body" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-head"><h2 id="modal-title"></h2><button class="btn icon" id="modal-close" aria-label="Close">✕</button></div>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/review.js"></script>
+  <script src="/static/gallery.js"></script>
 </body>
 </html>

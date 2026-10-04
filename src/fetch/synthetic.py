@@ -12,6 +12,7 @@ groups, which the sorter should discover as new-playlist clusters.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -98,8 +99,25 @@ def make(n_songs: int = 3000, n_playlists: int = 25, seed: int = 0, n_hidden: in
                      "album": f"{rng.choice(WORDS)} {rng.choice(NOUNS)}", "duration_ms": int(rng.integers(150, 300)) * 1000,
                      "release_date": f"{rng.integers(1970, 2026)}", "isrc": None}
     return {"pulled_at": "synthetic", "user_id": "me", "tracks": tracks,
-            "liked": [{"id": t, "added_at": None} for t in ids], "playlists": playlists,
+            "liked": _liked_times(ids, seed), "playlists": playlists,
             "synthetic_truth": {t: sorted(g) for t, g in truth.items()}}
+
+
+def _liked_times(ids: list[str], seed: int) -> list[dict]:
+    """Plausible "liked at" times for the gallery: five years, busier evenings and weekends.
+    Own generator, so the songs and playlists above stay identical for a given seed."""
+    rng = np.random.default_rng(seed + 1)
+    end = datetime(2026, 9, 30, tzinfo=timezone.utc)
+    days = (end - datetime(2021, 10, 1, tzinfo=timezone.utc)).days
+    hours = np.array([1, .6, .4, .3, .2, .3, .6, 1.2, 2, 2, 1.8, 2, 2.6, 2.4, 2, 2, 2.4, 3, 3.6, 4.2, 4.6, 4.4, 3.4, 2])
+    out = []
+    for t in ids:
+        d = end - timedelta(days=int(days * rng.random() ** 0.7))        # skew toward recent
+        if d.weekday() < 5 and rng.random() < 0.3:
+            d += timedelta(days=5 - d.weekday())                        # nudge some to the weekend
+        d = d.replace(hour=int(rng.choice(24, p=hours / hours.sum())), minute=int(rng.integers(60)))
+        out.append({"id": t, "added_at": min(d, end).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    return sorted(out, key=lambda x: x["added_at"], reverse=True)       # newest first, like Spotify
 
 
 def make_tags(lib: dict, seed: int = 0) -> pd.DataFrame:

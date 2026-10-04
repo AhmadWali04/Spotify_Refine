@@ -8,6 +8,21 @@ playlists, and lets you review everything in a local web app before anything is 
 - **Phase 1** ([PRD1.MD](PRD1.MD)): pick how to turn a song into a vector, by experiment.
 - **Phase 2** ([PHASE2.md](PHASE2.md)): the product built on that choice. Assignment models,
   calibrated suggestions, new-playlist discovery, the review app and safe write-back.
+- **Phase 3:** the web front end. Log in with Spotify, run the pipeline from the browser, sort, and
+  explore a gallery of visualizations of your taste.
+
+## Quick start (web app)
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m src.app                 # http://127.0.0.1:8888
+```
+
+Pick **Explore the demo** to try everything on a synthetic library, or **Log in with Spotify** (needs the
+keys below). The Home page runs the three steps (pull your library, fetch Last.fm tags, sort) with live
+progress. Then use Sort songs, New playlists and Apply, and open the **Taste gallery**. The app serves
+the OAuth callback itself, so it runs on the port in `SPOTIPY_REDIRECT_URI` (8888 by default).
 
 ## Try it now, no keys needed
 
@@ -18,7 +33,7 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m src.fetch.synthetic
 python -m src.sorter.run --library data/raw/library_synthetic.json
-python -m src.app --library data/raw/library_synthetic.json      # http://127.0.0.1:5000
+python -m src.app --library data/raw/library_synthetic.json      # http://127.0.0.1:8888
 ```
 
 On the demo, the confident tier is ~97% precise and ~9 in 10 songs from the hidden genres are routed to
@@ -67,7 +82,7 @@ of liked songs, `decide` also names a fallback featurizer (usually tags) for the
 ```bash
 python -m src.sorter.compare                 # optional: model comparison table (run.py does it automatically)
 python -m src.sorter.run                     # suggestions for every unsorted liked song
-python -m src.app                            # review at http://127.0.0.1:5000
+python -m src.app                            # review at http://127.0.0.1:8888
 python -m src.sorter.apply                   # dry run of the reviewed changes (the app has the same button)
 python -m src.sorter.apply --yes             # write them to Spotify
 python -m src.sorter.apply --undo data/applied/<changelog>.json
@@ -89,7 +104,19 @@ Writes `reports/plots/<run_id>/`: `pca_scatter.png`, `pca_pairs.png` (PC1-PC4), 
 (scree + cumulative, marking 50/80/90%), `svd_scatter.png` and `svd_spectrum.png`. PCA centers the songs
 first; the SVD is uncentered (as LSA uses it), so its first direction mostly tracks the average song.
 
-## The review app
+## The web app
+
+| View | What you do there |
+| --- | --- |
+| Landing | Log in with Spotify (OAuth, token cached in `.spotify_cache` and shared with the CLI) or open the demo library. |
+| Home | Run pull → tags → sort (each is the CLI command below, run in the background with progress and logs). Until Phase 1 writes `data/decision.json`, sorting uses tags + LSA (`configs/e1b_tags_lsa.yaml`). |
+| Sort songs, New playlists, Your playlists, Apply | The review flow below. |
+| Taste gallery | Taste galaxy (PCA map of every song; light up any playlist or new cluster), listening clock (likes by weekday × hour), time machine (release year vs. when you liked it), genre DNA (tag share per playlist), artist orbit, and playlist kinship (centroid similarity, a hint for merges). Every chart has a table view. |
+
+One Spotify account at a time: the app keeps one library on disk. Development-mode Spotify apps allow up
+to 5 users, who must be added on the developer dashboard.
+
+### Review views
 
 | Tab | What you do there |
 | --- | --- |
@@ -121,7 +148,8 @@ src/vectors.py       cached featurization shared by experiments and the sorter
 src/decide.py        PRD1 decision rules over experiments.csv
 src/plots.py         PCA / SVD plots of every song in a space
 src/sorter/          models, calibrate, compare, novelty, cluster, describe, run, review, apply
-src/app/             Flask API + one-page review UI (static/)
+src/app/             Flask API (server.py), Spotify login (auth.py), background pipeline steps (jobs.py),
+                     gallery data (insights.py), single-page front end (static/: app.js, review.js, gallery.js)
 run_experiment.py    experiment loop entry point
 tests/               math vs scikit-learn, evaluator at chance / perfect separation, Phase 2 end to end
 ```
