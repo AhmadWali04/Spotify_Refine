@@ -50,6 +50,16 @@ def tags_path(lib_path: Path) -> Path:
     return TAGS.with_name(f"tags{library_suffix(lib_path)}.parquet")
 
 
+def history_path(lib_path: Path) -> Path:
+    """Imported streaming history (src.fetch.history): one row per play."""
+    return TAGS.with_name(f"history{library_suffix(lib_path)}.parquet")
+
+
+def artist_tags_path(lib_path: Path) -> Path:
+    """Last.fm tags for artists you play but have no tagged songs by (src.fetch.lastfm)."""
+    return TAGS.with_name(f"artist_tags{library_suffix(lib_path)}.parquet")
+
+
 def write_json(path: Path, obj) -> None:
     """Atomic write so a crash mid-save never leaves a half-written review or suggestions file."""
     path.parent.mkdir(parents=True, exist_ok=True)

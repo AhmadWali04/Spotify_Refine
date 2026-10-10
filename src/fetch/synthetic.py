@@ -1,6 +1,7 @@
 """Fake library for testing the loop (M2) and demoing the full product before Spotify login works.
 
-    python -m src.fetch.synthetic   ->  data/raw/library_synthetic.json + data/raw/tags_library_synthetic.parquet
+    python -m src.fetch.synthetic   ->  data/raw/library_synthetic.json, tags_library_synthetic.parquet
+                                        and history_library_synthetic.parquet (listening history)
 
 Then run:  python run_experiment.py --config configs/e0_random.yaml --library data/raw/library_synthetic.json
       or:  python -m src.sorter.run --config configs/demo_synthetic.yaml --library data/raw/library_synthetic.json
@@ -120,6 +121,53 @@ def _liked_times(ids: list[str], seed: int) -> list[dict]:
     return sorted(out, key=lambda x: x["added_at"], reverse=True)       # newest first, like Spotify
 
 
+def make_history(lib: dict, seed: int = 0, start: str = "2022-01-01", end: str = "2026-09-30") -> pd.DataFrame:
+    """Streaming-history-shaped plays for the listening charts. Each hidden group has its own era:
+    a slow random swell over the years, so two periods really do sound different."""
+    rng = np.random.default_rng(seed + 2)
+    days = pd.date_range(start, end, freq="D", tz="UTC")
+    groups = sorted({g for gs in lib["synthetic_truth"].values() for g in gs})
+    by_group: dict[str, list[str]] = {g: [] for g in groups}
+    for t, gs in lib["synthetic_truth"].items():
+        by_group[gs[0]].append(t)
+    # Group weight over time: base size x a swell with a random period (1.5-4 years) and phase.
+    x = np.arange(len(days))[:, None] / 365.0
+    base = np.array([len(by_group[g]) for g in groups], float) ** 0.8
+    period, phase = rng.uniform(1.5, 4, len(groups)), rng.uniform(0, 2 * np.pi, len(groups))
+    w = base * np.exp(1.6 * np.sin(2 * np.pi * x / period + phase))
+    w /= w.sum(axis=1, keepdims=True)
+    # Plays per day: more on weekends and in winter, a slow upward trend, and some quiet days.
+    dow = np.where(days.dayofweek >= 5, 1.35, 1.0)
+    season = 1 + 0.2 * np.cos(2 * np.pi * (days.dayofyear - 15) / 365)
+    lam = 22 * dow * season * (0.7 + 0.5 * x[:, 0] / x[-1, 0]) * (rng.random(len(days)) > 0.06)
+    counts = rng.poisson(lam)
+    hours = np.array([.6, .3, .2, .1, .1, .2, .6, 1.4, 2, 1.8, 1.6, 1.8, 2.2, 2, 1.8, 1.9, 2.2, 2.8, 3, 3.2, 3.4, 3.2, 2.4, 1.4])
+    rows_day, rows_group = [], []
+    for d, c in enumerate(counts):
+        if c:
+            rows_day.append(np.full(c, d))
+            rows_group.append(rng.choice(len(groups), size=c, p=w[d]))
+    day_i, grp_i = np.concatenate(rows_day), np.concatenate(rows_group)
+    track_ids = np.empty(len(day_i), dtype=object)
+    for g, name in enumerate(groups):
+        idx = np.flatnonzero(grp_i == g)
+        pool = by_group[name]
+        pop = 1 / np.arange(1, len(pool) + 1) ** 0.9                 # a few favourites get most plays
+        track_ids[idx] = np.array(pool, dtype=object)[rng.choice(len(pool), size=len(idx), p=pop / pop.sum())]
+    secs = rng.choice(24, size=len(day_i), p=hours / hours.sum()) * 3600 + rng.integers(0, 3600, len(day_i))
+    ts = days[day_i] + pd.to_timedelta(secs, unit="s")
+    tr = lib["tracks"]
+    dur = np.array([tr[t]["duration_ms"] for t in track_ids])
+    skipped = rng.random(len(dur)) < 0.22
+    ms = np.where(skipped, (dur * rng.uniform(0.02, 0.5, len(dur))).astype(int), dur)
+    df = pd.DataFrame({"ts": ts, "ms": ms, "track": [tr[t]["name"] for t in track_ids],
+                       "artist": [tr[t]["artists"][0] for t in track_ids],
+                       "album": [tr[t]["album"] for t in track_ids], "track_id": track_ids})
+    for c in ("track", "artist", "album", "track_id"):
+        df[c] = df[c].astype("string")
+    return df.sort_values("ts").reset_index(drop=True)
+
+
 def make_tags(lib: dict, seed: int = 0) -> pd.DataFrame:
     """Last.fm-shaped tags: each song gets 2-4 of its group's tags plus some generic noise."""
     rng = np.random.default_rng(seed)
@@ -141,4 +189,6 @@ if __name__ == "__main__":
     out.write_text(json.dumps(lib, indent=1))
     tags_out = RAW / "tags_library_synthetic.parquet"
     make_tags(lib).to_parquet(tags_out, index=False)
-    print(f"Saved {out} and {tags_out}")
+    hist_out = RAW / "history_library_synthetic.parquet"
+    make_history(lib).to_parquet(hist_out, index=False)
+    print(f"Saved {out}, {tags_out} and {hist_out}")

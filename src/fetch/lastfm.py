@@ -7,6 +7,10 @@ Writes data/raw/tags.parquet with one row per (track_id, tag):
     track_id, tag, weight (Last.fm count 0-100), source ("track" | "artist" | "none")
 Tracks with no tags at all get a single row with tag=None, source="none", so they
 are not re-fetched every run.
+
+If a streaming history has been imported (src.fetch.history), it then tags the artists you play most
+but have no tagged songs by, for the listening charts' genres: data/raw/artist_tags.parquet
+(artist, tag, weight). Same resumability.
 """
 from __future__ import annotations
 
@@ -18,11 +22,13 @@ import pandas as pd
 import pylast
 from dotenv import load_dotenv
 
+from src import paths
 from src.paths import ROOT, TAGS, load_library
 
 MIN_TRACK_TAGS = 3        # fewer than this -> fall back to artist tags
 MAX_TAGS = 50
 FLUSH_EVERY = 100
+HISTORY_ARTISTS = 500     # most-played artists to tag from the streaming history
 
 
 def network() -> pylast.LastFMNetwork:
@@ -94,6 +100,36 @@ def main() -> None:
 
     per = old.groupby("track_id")["source"].first().value_counts()
     print(f"Saved {TAGS}\nTag source per track:\n{per.to_string()}")
+    tag_history_artists(net, lib, old, artist_cache)
+
+
+def tag_history_artists(net, lib: dict, track_tags: pd.DataFrame, artist_cache: dict) -> None:
+    """Artist tags for the most-played artists in the streaming history that no tagged song covers."""
+    hist_path, out = paths.history_path(paths.LIBRARY), paths.artist_tags_path(paths.LIBRARY)
+    if not hist_path.exists():
+        return
+    plays = pd.read_parquet(hist_path, columns=["artist", "ms"])
+    top = plays.groupby("artist")["ms"].sum().sort_values(ascending=False).head(HISTORY_ARTISTS).index
+    tagged = track_tags.loc[track_tags["tag"].notna(), "track_id"].unique()
+    covered = {(lib["tracks"].get(t, {}).get("artists") or [None])[0] for t in tagged}
+    old = pd.read_parquet(out) if out.exists() else pd.DataFrame(columns=["artist", "tag", "weight"])
+    covered |= set(old["artist"])
+    todo = [a for a in top if a and a not in covered]
+    print(f"\nArtists from your listening history: {len(todo)} to tag")
+    rows = []
+    for i, a in enumerate(todo, 1):
+        if a not in artist_cache:
+            artist_cache[a] = _top_tags(net.get_artist(a))
+            time.sleep(0.2)
+        rows += [{"artist": a, "tag": g, "weight": w} for g, w in artist_cache[a]] or \
+                [{"artist": a, "tag": None, "weight": 0}]
+        if i % FLUSH_EVERY == 0 or i == len(todo):
+            old = pd.concat([old, pd.DataFrame(rows)], ignore_index=True)
+            old.to_parquet(out, index=False)
+            rows = []
+            print(f"  {i}/{len(todo)}")
+    if todo:
+        print(f"Saved {out}")
 
 
 if __name__ == "__main__":

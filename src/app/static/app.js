@@ -27,7 +27,8 @@ function toast(msg, error = false) {
 }
 const guard = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { toast(e.message, true); } };
 
-const VIEWS = ["home", "review", "clusters", "playlists", "apply", "gallery"];
+const VIEWS = ["home", "review", "clusters", "playlists", "apply", "gallery", "listening"];
+const NEEDS_LIBRARY = ["listening"];          // views that only need a pulled library, not a finished sort
 const App = { session: null, view: "home", ready: false, hooks: { ready: [], view: [] } };
 window.App = App;
 
@@ -90,6 +91,7 @@ function renderLanding() {
 function renderChrome() {
   const s = App.session;
   $$(".nav a.needs-ready").forEach((a) => a.classList.toggle("disabled", !App.ready));
+  $$(".nav a.needs-library").forEach((a) => a.classList.toggle("disabled", !s.done.pull));
   const u = s.user;
   $("#user").innerHTML = u
     ? `<span class="user-pill"><span class="avatar">${u.image ? `<img src="${esc(u.image)}" alt="">` : esc(u.name[0])}</span>${esc(u.name)}</span>
@@ -169,7 +171,8 @@ function stepsToRun() {
 function showView() {
   let name = location.hash.slice(1);
   if (!VIEWS.includes(name)) name = "home";
-  if (!App.ready && name !== "home") name = "home";
+  const open = name === "home" || App.ready || (NEEDS_LIBRARY.includes(name) && App.session?.done.pull);
+  if (!open) name = "home";
   App.view = name;
   $$(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === name));
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));

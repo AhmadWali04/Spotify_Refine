@@ -1,0 +1,19 @@
+# PRD3 §6: symbolic (MIDI) playlist model. Flip `model:` to switch; nothing else changes.
+# CLI override: --symbolic-model markov | vector, --assignment A0..A4
+run_id: S1
+model: markov            # markov | vector
+markov:
+  sequences: [chords]    # any of: chords, pitch_classes, drums
+  order: 1               # 1 or 2
+  alpha: 0.5             # Laplace smoothing
+  weights: {chords: 1.0, pitch_classes: 0.5, drums: 0.5}
+  prior: size            # size | uniform
+vector:
+  assignment_model: A2   # A0 centroid | A1 lda | A2 mahalanobis | A3 knn10 | A4 label_spreading
+  blocks: [chord_trans, pc_trans, interval_hist, drum_grid, chroma_dft_mag, scalars]
+  pca_k: null            # e.g. 64 before A1/A2 when d is large
+augment:
+  transpose: true        # 12x circular shifts at train time (vector mode only)
+represent:
+  tau_chord: 0.6         # min cosine to a triad template, else "no chord"
+  use_key_signature: true

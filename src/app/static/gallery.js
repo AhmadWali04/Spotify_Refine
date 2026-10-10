@@ -473,6 +473,9 @@
     }, 200);
   });
 
+  // Shared with listening.js.
+  App.viz = { C, seq, tip, untip, empty, note, legendRamp, tableHtml, trunc, fmt, topRounded };
+
   App.hooks.view.push((name) => { if (name === "gallery") guard(show)(); });
   App.hooks.ready.push(async () => { G.key = null; if (App.view === "gallery") await guard(show)(); });
 })();

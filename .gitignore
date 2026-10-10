@@ -8,7 +8,7 @@ __pycache__/
 
 PRD1.md 
 PRD2.md 
-
+PHASE2.md 
 
 # Distribution / packaging
 .Python
@@ -229,4 +229,5 @@ reports/plots/
 # Logs from the synthetic demo library (the real experiments.csv / models.csv are kept)
 experiments_*.csv
 models_*.csv
+symbolic_synthetic.csv
 reports/decision_*.md

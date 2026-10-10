@@ -13,6 +13,9 @@ requests>=2.31
 flask>=3.0
 pytest>=8.0
 
+# MIDI analysis (PRD3)
+pretty_midi>=0.2.10
+
 # Audio (M4) - install separately once `python check_audio_install.py` shows what's missing.
 # Both decode .m4a previews through ffmpeg (brew install ffmpeg).
 # essentia-tensorflow

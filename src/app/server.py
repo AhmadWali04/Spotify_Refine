@@ -1,7 +1,8 @@
 """Flask API + single-page front end. Binds to 127.0.0.1 only: it's a personal tool.
 
 Flow: log in with Spotify (or pick the demo library) -> run pull / tags / sort from the Home view
--> review suggestions -> apply -> browse the taste gallery.
+-> review suggestions -> apply -> browse the taste gallery. The Listening view only needs a pulled
+library and an imported streaming history (uploaded here or via `python -m src.fetch.history`).
 """
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ from urllib.parse import quote, urlparse
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from src import paths
-from src.app import auth, insights, jobs
+from src.app import auth, insights, jobs, listening
+from src.fetch import history
 from src.sorter import apply as applier
 from src.sorter.review import Review, build_plan, cluster_members
 
@@ -239,5 +241,69 @@ def create_app(lib_path: Path, write_client=None) -> Flask:
         if state["insights"] is None:
             state["insights"] = insights.build(state["lib"], state["sugg"], state["lib_path"])
         return ok(**state["insights"])
+
+    # ------------------------------------------------------------ listening
+
+    def listen() -> listening.Listening:
+        """The listening data, rebuilt whenever the library, tags or history on disk change."""
+        lp = state["lib_path"]
+        if is_demo_path(lp) and lp.exists() and not paths.history_path(lp).exists():
+            from src.fetch.synthetic import make_history          # demo libraries made before history existed
+            make_history(paths.load_library(lp)).to_parquet(paths.history_path(lp), index=False)
+        files = (lp, paths.tags_path(lp), paths.history_path(lp), paths.artist_tags_path(lp))
+        key = (str(lp),) + tuple(f.stat().st_mtime if f.exists() else None for f in files)
+        if state.get("listen_key") != key:
+            state["listen"], state["listen_key"] = listening.Listening(paths.load_library(lp), lp), key
+        return state["listen"]
+
+    def arg(name: str) -> str | None:
+        return request.args.get(name) or None
+
+    @app.get("/api/listening/meta")
+    def listening_meta():
+        return ok(**listen().meta(arg("tz")))
+
+    @app.get("/api/listening/search")
+    def listening_search():
+        return ok(items=listen().search(request.args.get("dim", "artist"), request.args.get("q", "")))
+
+    @app.get("/api/listening/series")
+    def listening_series():
+        return ok(**listen().series(request.args.get("dim", "artist"), request.args.get("bucket", "month"),
+                                    request.args.getlist("item"), arg("tz")))
+
+    @app.get("/api/listening/share")
+    def listening_share():
+        return ok(**listen().share(arg("start"), arg("end"), arg("tz")))
+
+    @app.get("/api/listening/calendar")
+    def listening_calendar():
+        return ok(**listen().calendar(int(request.args["year"]), arg("dim"), arg("item"), arg("tz")))
+
+    @app.get("/api/listening/radar")
+    def listening_radar():
+        return ok(**listen().radar((arg("a_start"), arg("a_end")), (arg("b_start"), arg("b_end")), arg("tz")))
+
+    @app.get("/api/listening/overall")
+    def listening_overall():
+        return ok(**listen().overall())
+
+    @app.get("/api/listening/chord")
+    def listening_chord():
+        return ok(**listen().chord())
+
+    @app.post("/api/history")
+    def import_history():
+        """Upload the Spotify privacy export (.zip or the JSON files inside it)."""
+        lp = state["lib_path"]
+        if is_demo_path(lp):
+            raise ValueError("The demo library has its own synthetic history. Switch to your Spotify library to import yours.")
+        files = request.files.getlist("files")
+        df, used = history.read_files([(f.filename or "", f.read()) for f in files])
+        if not used:
+            raise ValueError("No streaming history in those files. Upload the export .zip, or the "
+                             "Streaming_History_Audio_*.json / StreamingHistory_music_*.json files inside it.")
+        df = history.save(df, lp, replace=request.form.get("replace") == "1")
+        return ok(files=len(used), summary=history.summary(df))
 
     return app

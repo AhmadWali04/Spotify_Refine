@@ -91,6 +91,46 @@ python -m src.sorter.apply --undo data/applied/<changelog>.json
 After applying, re-pull (`python -m src.fetch.spotify`) and re-run the sorter so it learns from the new memberships.
 To skip Phase 1, pass a featurizer by hand: `python -m src.sorter.run --config configs/e1b_tags_lsa.yaml`.
 
+## Listening history (the Listening view)
+
+Spotify's API only returns your last 50 plays, so the listening charts read your data export:
+
+1. At <https://www.spotify.com/account/privacy/> request **Extended streaming history** (every play since you
+   joined; up to 30 days) and/or **Account data** (last year only; about 5 days).
+2. Drop the .zip on the Listening page, or: `python -m src.fetch.history ~/Downloads/my_spotify_data.zip`
+   (merges with what's there; `--replace` starts over). Writes `data/raw/history.parquet`.
+3. Run the **Tags** step again (`python -m src.fetch.lastfm`): it also tags the 500 artists you play most that
+   have no tagged liked songs, so their plays get a genre.
+
+| Chart | What it shows |
+| --- | --- |
+| Hours over time | Hours per week / month / year for up to 6 artists, albums, songs, genres or playlists, plus all listening |
+| Genre mix | Donut of your top genres by hours in any date range (presets or custom dates) |
+| Listening calendar | GitHub-style year grid, optionally for one artist / album / song / genre / playlist |
+| Then vs. now | Radar of genre shares in two periods, one web each |
+| Artist web | Chord diagram: top artists joined by how much their genres overlap, colored by the genre they share most |
+| Your taste, overall | Radar of all-time genre shares: what you play (hours) next to what you like (songs) |
+
+A play's genre is its song's strongest Last.fm tag (else its artist's), so genre hours add up to the total.
+The last two charts work without a history, from your liked songs. The demo library ships a synthetic history.
+
+## MIDI analysis (PRD3, in progress)
+
+A symbolic view of each song: MIDI -> dataframes and matrices you can inspect -> a Markov or vector
+playlist model. Done so far: M13 (representations), and M15/M16 models + toggle on synthetic MIDI.
+Still to come: the Lakh dataset (M14), audio -> MIDI transcription (M17), your playlists (M18) and the app page (M19).
+
+```bash
+python -m src.midi.inspect song.mid                  # or --synthetic jazz; writes data/inspect/<id>/
+python -m src.midi.experiment --data synthetic --suite                   # S1-S5 -> symbolic_synthetic.csv
+python -m src.midi.experiment --data labels.csv --symbolic-model vector --assignment A2
+```
+
+`configs/symbolic.yaml` picks the model (`model: markov | vector`) and its settings. A labels CSV has
+`track_id, path, label` (and optionally `fold`). Key-relative matrices (chords, melody) put the tonic at 0,
+so the same progression in any key looks the same. The synthetic genres are easy (tempo and drums give
+them away), so they test the plumbing, not the model.
+
 ## Plots of your whole library
 
 ```bash
@@ -111,6 +151,7 @@ first; the SVD is uncentered (as LSA uses it), so its first direction mostly tra
 | Landing | Log in with Spotify (OAuth, token cached in `.spotify_cache` and shared with the CLI) or open the demo library. |
 | Home | Run pull → tags → sort (each is the CLI command below, run in the background with progress and logs). Until Phase 1 writes `data/decision.json`, sorting uses tags + LSA (`configs/e1b_tags_lsa.yaml`). |
 | Sort songs, New playlists, Your playlists, Apply | The review flow below. |
+| Listening | Your streaming history: hours over time, genre mix, listening calendar, then-vs-now and overall taste radars, artist web. Needs only a pulled library (see above). |
 | Taste gallery | Taste galaxy (PCA map of every song; light up any playlist or new cluster), listening clock (likes by weekday × hour), time machine (release year vs. when you liked it), genre DNA (tag share per playlist), artist orbit, and playlist kinship (centroid similarity, a hint for merges). Every chart has a table view. |
 
 One Spotify account at a time: the app keeps one library on disk. Development-mode Spotify apps allow up
@@ -140,15 +181,17 @@ Songs the method can't vectorize are left out of `covered_ids`, and that is what
 
 ```
 configs/             one YAML per experiment run (run_id, method, params, standardize); demo_synthetic.yaml for the demo
-src/fetch/           spotify.py, lastfm.py, itunes.py, synthetic.py
+src/fetch/           spotify.py, lastfm.py, itunes.py, synthetic.py, history.py (streaming-history import)
 src/featurize/       random (E0), tags (E1, E1b), essentia (E2), clap (E3), combine (E4-E6), synthetic (demo)
 src/linalg.py        z-score, block weighting, PCA and truncated SVD (hand-written)
 src/evaluate.py      fixed 5 folds, nearest-centroid and kNN-10 cosine scoring, metrics
 src/vectors.py       cached featurization shared by experiments and the sorter
 src/decide.py        PRD1 decision rules over experiments.csv
 src/plots.py         PCA / SVD plots of every song in a space
+src/midi/            represent (dataframes + matrices), chords, beats_key, synthetic MIDI, inspect, experiment
+src/models/symbolic/ base (toggle), markov, vector (wraps the src/sorter models)
 src/sorter/          models, calibrate, compare, novelty, cluster, describe, run, review, apply
-src/app/             Flask API (server.py), Spotify login (auth.py), background pipeline steps (jobs.py),
+src/app/             Flask API (server.py), Spotify login (auth.py), background pipeline steps (jobs.py), listening charts (listening.py),
                      gallery data (insights.py), single-page front end (static/: app.js, review.js, gallery.js)
 run_experiment.py    experiment loop entry point
 tests/               math vs scikit-learn, evaluator at chance / perfect separation, Phase 2 end to end

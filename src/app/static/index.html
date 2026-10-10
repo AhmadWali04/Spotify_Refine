@@ -19,6 +19,7 @@
     <symbol id="i-lib" viewBox="0 0 24 24"><path d="M4 3v18M9 3v18M14.5 3.5l6 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12h12m0 0-5-5m5 5-5 5M20 5v14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
     <symbol id="i-gallery" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor"/><rect x="13" y="3" width="8" height="5" rx="2" fill="currentColor"/><rect x="13" y="10" width="8" height="11" rx="2" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor"/></symbol>
+    <symbol id="i-listen" viewBox="0 0 24 24"><path d="M4 14v4M8 9v9M12 5v13M16 11v7M20 7v11" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></symbol>
     <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
     <symbol id="i-table" viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></symbol>
   </svg>
@@ -48,6 +49,7 @@
         <li><strong>Sort</strong> every unsorted liked song into the playlist it fits, with a confidence for each.</li>
         <li><strong>Discover</strong> new playlists hiding in the songs that fit nowhere.</li>
         <li><strong>See</strong> your taste: a galaxy of your library, your listening clock, your eras.</li>
+        <li><strong>Relive</strong> your listening: hours over time, genre mix, a year-long calendar, and how your taste has shifted.</li>
       </ul>
     </div>
   </div>
@@ -63,6 +65,7 @@
         <a data-view="playlists" href="#playlists" class="needs-ready"><svg><use href="#i-lib"/></svg><span>Your playlists</span></a>
         <a data-view="apply" href="#apply" class="needs-ready"><svg><use href="#i-send"/></svg><span>Apply</span><span class="count accent" id="n-plan"></span></a>
         <a data-view="gallery" href="#gallery" class="needs-ready"><svg><use href="#i-gallery"/></svg><span>Taste gallery</span></a>
+        <a data-view="listening" href="#listening" class="needs-library"><svg><use href="#i-listen"/></svg><span>Listening</span></a>
       </nav>
       <div class="side-card" id="mode-card"></div>
     </aside>
@@ -148,6 +151,13 @@
             <div class="stats" id="stats"></div></div>
           <div class="pad"><div class="gallery" id="gallery"></div></div>
         </section>
+
+        <!-- LISTENING -->
+        <section id="view-listening" class="view">
+          <div class="hero listen-hero"><div class="eyebrow">Listening</div><h1 id="listen-title">Your listening</h1>
+            <div class="stats" id="listen-stats"></div></div>
+          <div class="pad"><div id="import"></div><div class="gallery" id="listen-grid"></div></div>
+        </section>
       </div>
     </div>
   </div>
@@ -164,5 +174,6 @@
   <script src="/static/app.js"></script>
   <script src="/static/review.js"></script>
   <script src="/static/gallery.js"></script>
+  <script src="/static/listening.js"></script>
 </body>
 </html>
