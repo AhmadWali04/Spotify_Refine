@@ -46,7 +46,7 @@ def test_direction_is_learned(order):
 
 
 def test_songs_without_a_sequence_fall_back_to_the_prior():
-    m = MarkovModel(sequences=["chords", "drums"]).fit([toy(UP), toy(UP), toy(DOWN)], [{"a"}, {"a"}, {"b"}])
+    m = MarkovModel(sequences=["chords", "drums"], prior="size").fit([toy(UP), toy(UP), toy(DOWN)], [{"a"}, {"a"}, {"b"}])
     S = m.scores([toy([])])
     assert np.allclose(S[0], m.log_prior) and S[0, 0] > S[0, 1]
 

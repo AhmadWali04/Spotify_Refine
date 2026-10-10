@@ -16,6 +16,13 @@ pytest>=8.0
 # MIDI analysis (PRD3)
 pretty_midi>=0.2.10
 
+# Audio -> MIDI transcription (PRD3 M17). Install separately; basic-pitch's own pins don't resolve on
+# Python 3.12, so install it without deps and use the ONNX backend:
+#   pip install demucs
+#   pip install --no-deps basic-pitch==0.4.0 && pip install librosa mir_eval resampy onnxruntime
+# S6 (transcription gap) also renders MIDI: brew install fluid-synth && pip install pyfluidsynth,
+# plus GeneralUser-GS.sf2 (github.com/mrbumpy409/GeneralUser-GS) in data/soundfonts/.
+
 # Audio (M4) - install separately once `python check_audio_install.py` shows what's missing.
 # Both decode .m4a previews through ffmpeg (brew install ffmpeg).
 # essentia-tensorflow

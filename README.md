@@ -114,22 +114,32 @@ Spotify's API only returns your last 50 plays, so the listening charts read your
 A play's genre is its song's strongest Last.fm tag (else its artist's), so genre hours add up to the total.
 The last two charts work without a history, from your liked songs. The demo library ships a synthetic history.
 
-## MIDI analysis (PRD3, in progress)
+## MIDI analysis (Phase 4, in progress)
 
-A symbolic view of each song: MIDI -> dataframes and matrices you can inspect -> a Markov or vector
-playlist model. Done so far: M13 (representations), and M15/M16 models + toggle on synthetic MIDI.
-Still to come: the Lakh dataset (M14), audio -> MIDI transcription (M17), your playlists (M18) and the app page (M19).
+A symbolic view of each song: audio or MIDI -> dataframes and matrices you can inspect -> a Markov or
+vector playlist model. Done: representations (M13), the Lakh genre benchmark (M14), Markov and vector
+models with a config toggle (M15/M16), and audio -> MIDI transcription (M17). Still to come: your
+playlists (M18) and the app page (M19). Status and results are in [PRD.md](PRD.md).
 
 ```bash
+# Look inside one song
 python -m src.midi.inspect song.mid                  # or --synthetic jazz; writes data/inspect/<id>/
-python -m src.midi.experiment --data synthetic --suite                   # S1-S5 -> symbolic_synthetic.csv
-python -m src.midi.experiment --data labels.csv --symbolic-model vector --assignment A2
+python -m src.midi.transcribe song.m4a               # audio -> data/midi/<id>.mid (Demucs + Basic Pitch)
+
+# Lakh MIDI benchmark (~1.4 GB download, ~420 MB kept)
+python -m src.data.lakh download && python -m src.data.lakh extract
+python -m src.data.lakh build --cap 400              # frozen, balanced subset -> data/lmd/subset.csv
+python -m src.midi.experiment --data data/lmd/subset.csv --suite            # S1-S5 -> symbolic.csv
+python -m src.midi.gap --n 140                       # S6 transcription gap -> symbolic_gap.csv
+
+# No downloads
+python -m src.midi.experiment --data synthetic --suite                       # -> symbolic_synthetic.csv
 ```
 
-`configs/symbolic.yaml` picks the model (`model: markov | vector`) and its settings. A labels CSV has
-`track_id, path, label` (and optionally `fold`). Key-relative matrices (chords, melody) put the tonic at 0,
-so the same progression in any key looks the same. The synthetic genres are easy (tempo and drums give
-them away), so they test the plumbing, not the model.
+`configs/symbolic.yaml` picks the model (`model: markov | vector`); `--symbolic-model` and `--assignment`
+override it. A labels CSV has `track_id, path, label` (and optionally `fold`). Chord and melody matrices
+are key-relative (tonic = 0), and note onsets snap to the nearest 16th of the beat grid. Transcription needs
+extra installs (see `requirements.txt`); a 30 s clip takes ~5-15 s on an M-series Mac and is cached.
 
 ## Plots of your whole library
 
@@ -188,7 +198,8 @@ src/evaluate.py      fixed 5 folds, nearest-centroid and kNN-10 cosine scoring, 
 src/vectors.py       cached featurization shared by experiments and the sorter
 src/decide.py        PRD1 decision rules over experiments.csv
 src/plots.py         PCA / SVD plots of every song in a space
-src/midi/            represent (dataframes + matrices), chords, beats_key, synthetic MIDI, inspect, experiment
+src/midi/            represent (dataframes + matrices), chords, beats_key, transcribe, synthetic MIDI, inspect, experiment, gap (S6)
+src/data/            lakh.py: Lakh MIDI + tagtraum genres -> frozen subset
 src/models/symbolic/ base (toggle), markov, vector (wraps the src/sorter models)
 src/sorter/          models, calibrate, compare, novelty, cluster, describe, run, review, apply
 src/app/             Flask API (server.py), Spotify login (auth.py), background pipeline steps (jobs.py), listening charts (listening.py),

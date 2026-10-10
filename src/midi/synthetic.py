@@ -40,7 +40,7 @@ GENRES = {
 }
 
 
-def song(genre: str, seed: int) -> pretty_midi.PrettyMIDI:
+def song(genre: str, seed: int, n_bars: int | None = None) -> pretty_midi.PrettyMIDI:
     g = GENRES[genre]
     rng = np.random.default_rng(seed)
     tempo = rng.uniform(*g["tempo"])
@@ -55,7 +55,7 @@ def song(genre: str, seed: int) -> pretty_midi.PrettyMIDI:
     drums = pretty_midi.Instrument(0, is_drum=True, name="drums")
 
     prog = g["progs"][rng.integers(len(g["progs"]))]
-    n_bars = int(rng.integers(8, 17))
+    n_bars = n_bars or int(rng.integers(8, 17))
     cb = g["chord_beats"]
     chords_per_bar = 4 // cb
     deg = 0                                                          # melody scale degree

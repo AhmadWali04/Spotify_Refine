@@ -222,7 +222,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Playlist Sorter: local data, caches and outputs
-data/
+/data/
 reports/*.png
 reports/plots/
 .spotify_cache

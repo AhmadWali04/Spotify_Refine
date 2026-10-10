@@ -22,6 +22,7 @@ import pretty_midi
 from src.linalg import l2_normalize
 from src.midi import beats_key, chords
 
+VERSION = 3            # bump when a representation changes; invalidates data/midi/reps/
 STEPS_PER_BEAT = 4
 STEPS_PER_BAR = 16
 DRUM_ROWS = ("kick", "snare", "hat")
@@ -31,6 +32,7 @@ MELODY_NAMES = ("other", "vocals")   # stem names written by transcription (M17)
 ALPHABETS = {"chords": chords.N_CHORDS, "pitch_classes": 12, "drums": 8}
 BLOCKS = ("chord_trans", "pc_trans", "interval_hist", "drum_grid", "drum_grid_var",
           "chroma_dft_mag", "scalars")
+BIG_MATRICES = ("piano_roll", "chroma", "chroma_keynorm", "ssm")
 SCALARS = ("tempo", "minor", "note_density", "pitch_range", "syncopation", "n_unique_chords",
            "drum_density")
 
@@ -52,6 +54,13 @@ class SongRep:
     def key_name(self) -> str:
         return f"{chords.PITCH_NAMES[self.tonic]} {self.mode}"
 
+    def compact(self) -> "SongRep":
+        """Only what the models read (no dataframes, piano roll, chroma or SSM): ~1% of the size, for caching."""
+        return SongRep(self.track_id, self.tempo, self.tonic, self.mode, pd.DataFrame(), pd.DataFrame(),
+                       self.summary[["track_id", "tempo", "key", "n_beats", "n_bars"]],
+                       {k: v for k, v in self.matrices.items() if k not in BIG_MATRICES},
+                       self.sequences, self.scalars)
+
 
 def fold_matrix() -> np.ndarray:
     """F in {0,1}^{12 x 128}: F[c, p] = 1 when pitch p has pitch class c."""
@@ -62,6 +71,11 @@ def fold_matrix() -> np.ndarray:
 
 def pitch_name(p: int) -> str:
     return f"{chords.PITCH_NAMES[p % 12]}{p // 12 - 1}"
+
+
+def quantize(beat_pos: np.ndarray) -> np.ndarray:
+    """Fractional beat position -> nearest 16th-note step."""
+    return np.floor(np.asarray(beat_pos) * STEPS_PER_BEAT + 0.5).astype(int)
 
 
 def _beat_pos(times: np.ndarray, beats: np.ndarray) -> np.ndarray:
@@ -83,7 +97,9 @@ def _notes_df(pm, track_id: str, beats, downbeats, tonic: int) -> pd.DataFrame:
     df = pd.DataFrame(rows, columns=["instrument", "program", "is_drum", "pitch", "start_s", "end_s", "velocity"])
     df = df.sort_values(["start_s", "pitch"], kind="stable").reset_index(drop=True)
     sb, eb = _beat_pos(df["start_s"].to_numpy(), beats), _beat_pos(df["end_s"].to_numpy(), beats)
-    bar = np.searchsorted(downbeats, np.floor(sb), side="right") - 1
+    # Onsets snap to the nearest 16th (performed and transcribed notes land a little early or late).
+    step = quantize(sb)
+    bar = np.searchsorted(downbeats, step // STEPS_PER_BEAT, side="right") - 1
     df.insert(0, "track_id", track_id)
     drum = df["is_drum"].to_numpy()
     df.insert(5, "pitch_name", [pretty_midi.note_number_to_drum_name(p) or str(p) if d else pitch_name(p)
@@ -92,7 +108,7 @@ def _notes_df(pm, track_id: str, beats, downbeats, tonic: int) -> pd.DataFrame:
     df["start_beat"] = sb
     df["duration_beats"] = eb - sb
     df["bar"] = bar
-    df["step_in_bar"] = np.floor((sb - downbeats[bar]) * STEPS_PER_BEAT + 1e-6).astype(int)
+    df["step_in_bar"] = step - downbeats[bar] * STEPS_PER_BEAT
     df["velocity"] = df.pop("velocity")
     return df
 
@@ -119,8 +135,8 @@ def from_midi(pm: pretty_midi.PrettyMIDI, track_id: str, tau_chord: float = 0.6,
     tonic, mode = beats_key.key(pm, hist, use_key_signature)
     notes = _notes_df(pm, track_id, beats, downbeats, tonic)
 
-    step = np.floor(notes["start_beat"].to_numpy() * STEPS_PER_BEAT + 1e-6).astype(int)
-    end_step = np.ceil((notes["start_beat"] + notes["duration_beats"]).to_numpy() * STEPS_PER_BEAT - 1e-6).astype(int)
+    step = quantize(notes["start_beat"].to_numpy())
+    end_step = quantize((notes["start_beat"] + notes["duration_beats"]).to_numpy())
     drum = notes["is_drum"].to_numpy()
 
     # Piano roll (binary) and chroma.
@@ -248,7 +264,8 @@ def transpose_matrices(m: dict[str, np.ndarray], k: int) -> dict[str, np.ndarray
     out["chord_trans"] = ct
     out["pc_trans"] = np.roll(m["pc_trans"], (k, k), axis=(0, 1))
     out["chord_seq"] = perm[m["chord_seq"]]
-    out["chroma_keynorm"] = np.roll(m["chroma_keynorm"], k, axis=0)
+    if "chroma_keynorm" in m:
+        out["chroma_keynorm"] = np.roll(m["chroma_keynorm"], k, axis=0)
     return out
 
 

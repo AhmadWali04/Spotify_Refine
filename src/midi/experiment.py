@@ -58,14 +58,15 @@ def merge(cfg: dict, over: dict) -> dict:
 
 # ---------------------------------------------------------------- data
 
-def _cached(track_id: str, path: Path, rcfg: dict) -> represent.SongRep:
-    key = {"mtime": path.stat().st_mtime, **rcfg}
+def cached_rep(track_id: str, path: Path, rcfg: dict) -> represent.SongRep:
+    """The compact representation of one MIDI file, from data/midi/reps/ when the file and settings match."""
+    key = {"mtime": path.stat().st_mtime, "version": represent.VERSION, **rcfg}
     f = REPS / f"{track_id}.pkl"
     if f.exists():
         saved = pickle.loads(f.read_bytes())
         if saved["key"] == key:
             return saved["rep"]
-    rep = represent.from_path(path, track_id, **rcfg)
+    rep = represent.from_path(path, track_id, **rcfg).compact()
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_bytes(pickle.dumps({"key": key, "rep": rep}))
     return rep
@@ -80,7 +81,7 @@ def load_data(source: str, rcfg: dict, per_genre: int = 30):
     reps, labels, folds = [], [], []
     for r in df.itertuples():
         try:
-            reps.append(_cached(str(r.track_id), Path(r.path), rcfg))
+            reps.append(cached_rep(str(r.track_id), Path(r.path), rcfg))
         except (ValueError, OSError, EOFError) as e:      # unreadable or empty MIDI: skip, report
             print(f"  skip {r.track_id}: {e}")
             continue

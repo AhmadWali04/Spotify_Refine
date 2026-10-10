@@ -31,7 +31,7 @@ class MarkovModel:
     name = "markov"
 
     def __init__(self, sequences=("chords",), order: int = 1, alpha: float = 0.5,
-                 weights: dict | None = None, prior: str = "size"):
+                 weights: dict | None = None, prior: str = "uniform"):
         self.sequences = list(sequences)
         self.order = order
         self.alpha = alpha
